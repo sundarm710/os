@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addMinutes,
+  formatDateTime,
   formatForGCal,
   formatRelative,
   formatTime,
@@ -133,6 +134,20 @@ describe('formatTime', () => {
   it('handles midnight and noon edge cases', () => {
     expect(formatTime(localDate(2026, 5, 7, 0, 0))).toBe('12:00 AM');
     expect(formatTime(localDate(2026, 5, 7, 12, 0))).toBe('12:00 PM');
+  });
+});
+
+describe('formatDateTime', () => {
+  it('combines short month name, day-of-month, and 12-hour time', () => {
+    expect(formatDateTime(localDate(2026, 5, 7, 14, 45))).toBe('May 7 · 2:45 PM');
+  });
+
+  it('handles single-digit day without padding', () => {
+    expect(formatDateTime(localDate(2026, 5, 1, 9, 0))).toBe('May 1 · 9:00 AM');
+  });
+
+  it('handles midnight as 12:00 AM with the new day', () => {
+    expect(formatDateTime(localDate(2026, 5, 8, 0, 0))).toBe('May 8 · 12:00 AM');
   });
 });
 

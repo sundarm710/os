@@ -84,6 +84,17 @@ export function formatTime(d: Date): string {
 }
 
 /**
+ * Format with month + day + time (e.g. "May 7 · 2:45 PM"). Used for the
+ * Calendar summary footer where the user needs the date so day-rollover is
+ * visible (drag past midnight, drag back to yesterday, etc.).
+ */
+export function formatDateTime(d: Date): string {
+  const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d);
+  const day = d.getDate();
+  return `${month} ${day} · ${formatTime(d)}`;
+}
+
+/**
  * Format a Date as RFC3339 in the given timezone, e.g.
  *   2026-05-07T15:00:00+05:30
  *

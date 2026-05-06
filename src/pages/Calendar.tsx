@@ -4,6 +4,7 @@ import { haptic } from '../lib/haptic';
 import { readString, writeString } from '../lib/storage';
 import {
   addMinutes,
+  formatDateTime,
   formatForGCal,
   formatTime,
   nextQuarterHour,
@@ -16,8 +17,6 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusLine } from '../components/StatusLine';
 import { SubmitButton } from '../components/SubmitButton';
 
-// 3x3 grid laid out by daily-life cluster, not alphabetised. Edit this array
-// to change visible chips — the type derives from it.
 const TITLE_ROWS = [
   ['Amrutha', 'Build', 'Workout'],
   ['Chess', 'German', 'Admin'],
@@ -28,7 +27,9 @@ type Title = (typeof TITLE_ROWS)[number][number];
 
 const ALL_TITLES = TITLE_ROWS.flat() as readonly Title[];
 const DEFAULT_TITLE: Title = 'Build';
-const DEFAULT_DURATION_MIN = 15;
+const DEFAULT_DURATION_MIN = 30;
+const SHORT_DURATION_MIN = 15;
+const LONG_DURATION_MIN = 60;
 const STEP_MIN = 15;
 const TIMEZONE = 'Asia/Kolkata';
 
@@ -81,7 +82,7 @@ export default function Calendar() {
     <section className="flex flex-col gap-6">
       <PageHeader
         title="Calendar Block"
-        subtitle="Tap title, drag to adjust, submit."
+        subtitle="Tap title, drag dials up/down, submit."
       />
 
       <div className="flex flex-col gap-2">
@@ -111,26 +112,34 @@ export default function Calendar() {
         ))}
       </div>
 
-      <DialRow
-        label="Start"
-        value={formatTime(start)}
-        onStep={stepStart}
-        onLeftEdgeTap={() => setStart(previousQuarterHour(new Date()))}
-        onRightEdgeTap={() => setStart(nextQuarterHour(new Date()))}
-        disabled={isSending}
-      />
+      <div className="grid grid-cols-2 gap-3">
+        <DialRow
+          label="Start"
+          value={formatTime(start)}
+          onStep={stepStart}
+          onLeftEdgeTap={() => setStart(previousQuarterHour(new Date()))}
+          onRightEdgeTap={() => setStart(nextQuarterHour(new Date()))}
+          disabled={isSending}
+        />
 
-      <DialRow
-        label="Duration"
-        value={`${durationMin} min`}
-        onStep={stepDuration}
-        canDecrement={durationMin > STEP_MIN}
-        disabled={isSending}
-      />
+        <DialRow
+          label="Duration"
+          value={`${durationMin} min`}
+          onStep={stepDuration}
+          canDecrement={durationMin > STEP_MIN}
+          onLeftEdgeTap={() => {
+            haptic('tap');
+            setDurationMin(SHORT_DURATION_MIN);
+          }}
+          onRightEdgeTap={() => {
+            haptic('tap');
+            setDurationMin(LONG_DURATION_MIN);
+          }}
+          disabled={isSending}
+        />
+      </div>
 
-      <p className="text-xs text-slate-500">
-        Ends at {formatTime(end)} · {TIMEZONE}
-      </p>
+      <SummaryFooter start={start} end={end} timezone={TIMEZONE} />
 
       <SubmitButton
         label="Schedule"
@@ -146,5 +155,33 @@ export default function Calendar() {
         queuedLabel="Saved — will sync"
       />
     </section>
+  );
+}
+
+function SummaryFooter({
+  start,
+  end,
+  timezone,
+}: {
+  start: Date;
+  end: Date;
+  timezone: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm">
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs uppercase tracking-wide text-slate-500">Start</span>
+        <span className="font-medium tabular-nums text-slate-100">
+          {formatDateTime(start)}
+        </span>
+      </div>
+      <div className="mt-1 flex items-baseline justify-between">
+        <span className="text-xs uppercase tracking-wide text-slate-500">End</span>
+        <span className="font-medium tabular-nums text-slate-100">
+          {formatDateTime(end)}
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{timezone}</p>
+    </div>
   );
 }
