@@ -58,7 +58,7 @@ export default function Mood() {
 
   async function submit() {
     if (!canSubmit || selected === null) return;
-    vibrate(15);
+    vibrate(40);
     setStatus('sending');
     setError(null);
     try {
@@ -71,7 +71,7 @@ export default function Mood() {
       localStorage.setItem(LAST_LOGGED_KEY, ts);
       setLastLoggedAt(ts);
       setStatus('sent');
-      vibrate([15, 60, 15]);
+      vibrate([60, 80, 120]);
       setNote('');
       setTimeout(() => {
         setStatus('idle');
@@ -84,7 +84,7 @@ export default function Mood() {
   }
 
   function pick(rating: MoodPayload['rating']) {
-    vibrate(10);
+    vibrate(30);
     setSelected(rating);
     if (status === 'error') {
       setStatus('idle');
