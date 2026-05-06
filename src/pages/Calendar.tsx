@@ -7,6 +7,7 @@ import {
   formatForGCal,
   formatTime,
   nextQuarterHour,
+  previousQuarterHour,
   snapToQuarterHour,
 } from '../lib/time';
 import { useSubmission } from '../lib/useSubmission';
@@ -114,6 +115,8 @@ export default function Calendar() {
         label="Start"
         value={formatTime(start)}
         onStep={stepStart}
+        onLeftEdgeTap={() => setStart(previousQuarterHour(new Date()))}
+        onRightEdgeTap={() => setStart(nextQuarterHour(new Date()))}
         disabled={isSending}
       />
 

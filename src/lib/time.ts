@@ -14,6 +14,22 @@ export function addMinutes(d: Date, minutes: number): Date {
 }
 
 /**
+ * Round a Date backward to the most recent :00, :15, :30, or :45 boundary in
+ * the local wall-clock (inclusive — if `now` is exactly on a boundary, returns
+ * `now` with seconds/ms zeroed).
+ *
+ * Use cases: "snap Start back to the most-recent quarter hour from now" so a
+ * user who has dragged into the future can return with one tap.
+ */
+export function previousQuarterHour(now: Date): Date {
+  const out = new Date(now);
+  out.setSeconds(0, 0);
+  const minutes = out.getMinutes();
+  out.setMinutes(minutes - (minutes % QUARTER_MIN));
+  return out;
+}
+
+/**
  * Round a Date forward to the next :00, :15, :30, or :45 boundary in the
  * local wall-clock. If `now` is exactly on a boundary, returns the next one
  * (always strictly forward).

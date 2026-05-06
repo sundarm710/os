@@ -5,6 +5,7 @@ import {
   formatRelative,
   formatTime,
   nextQuarterHour,
+  previousQuarterHour,
   snapToQuarterHour,
 } from './time';
 
@@ -63,6 +64,43 @@ describe('nextQuarterHour', () => {
     expect(out.getHours()).toBe(10);
     expect(out.getMinutes()).toBe(15);
     expect(out.getSeconds()).toBe(0);
+  });
+});
+
+describe('previousQuarterHour', () => {
+  it('rounds back to the most recent :15 mid-quarter', () => {
+    const out = previousQuarterHour(localDate(2026, 5, 7, 10, 23));
+    expect(out.getHours()).toBe(10);
+    expect(out.getMinutes()).toBe(15);
+    expect(out.getSeconds()).toBe(0);
+    expect(out.getMilliseconds()).toBe(0);
+  });
+
+  it('returns the same boundary when input is exactly on :15', () => {
+    const out = previousQuarterHour(localDate(2026, 5, 7, 10, 15, 0, 0));
+    expect(out.getHours()).toBe(10);
+    expect(out.getMinutes()).toBe(15);
+    expect(out.getSeconds()).toBe(0);
+  });
+
+  it('zeroes seconds/ms when input is just past a boundary', () => {
+    const out = previousQuarterHour(localDate(2026, 5, 7, 10, 15, 30, 250));
+    expect(out.getMinutes()).toBe(15);
+    expect(out.getSeconds()).toBe(0);
+    expect(out.getMilliseconds()).toBe(0);
+  });
+
+  it('falls back to :00 when sub-15-min into the hour', () => {
+    const out = previousQuarterHour(localDate(2026, 5, 7, 10, 5));
+    expect(out.getMinutes()).toBe(0);
+  });
+
+  it('does not cross hour or day boundaries backward', () => {
+    // 00:05 → 00:00 (same day)
+    const out = previousQuarterHour(localDate(2026, 5, 7, 0, 5));
+    expect(out.getDate()).toBe(7);
+    expect(out.getHours()).toBe(0);
+    expect(out.getMinutes()).toBe(0);
   });
 });
 
