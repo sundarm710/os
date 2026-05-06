@@ -1,6 +1,8 @@
-// Webhook client. Offline queue (IndexedDB) is deferred to Day 3.
+// Webhook client. Stays a thin POST wrapper; queue + drain logic lives in
+// src/lib/queue.ts and src/lib/sync.ts.
 
 export type MoodPayload = {
+  client_id: string;
   rating: 1 | 2 | 3 | 4 | 5;
   note: string | null;
   client_timestamp: string;
