@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_WEBHOOK_URL: string;
+  readonly VITE_WEBHOOK_CALENDAR_URL: string;
   readonly VITE_AUTH_TOKEN: string;
 }
 

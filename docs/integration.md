@@ -1,6 +1,19 @@
-# Day 1 — n8n + Postgres + Obsidian integration
+# Backend integration — n8n + Postgres + Obsidian + Google Calendar
 
-Everything below is what the PWA expects on the backend. Configure once in n8n, then the app just hits the webhook.
+Everything below is what the PWA expects on the backend. Configure once in n8n, then the app just hits the webhooks.
+
+Two workflows live in n8n:
+
+| Flow | Webhook path | Stores in | Idempotency |
+| --- | --- | --- | --- |
+| `mood-log` | `/webhook/mood-log` | Postgres `mood_logs` + Obsidian daily note | DB UNIQUE on `client_id` (Day 3) |
+| `calendar-block` | `/webhook/calendar-block` | Google Calendar (primary) | Network-layer (queue marks done on 200) — see Day 4 notes |
+
+Both reuse `MOOD_LOG_AUTH_TOKEN` for V1.
+
+---
+
+## Mood — Day 1 + Day 3
 
 ## Webhook contract
 
@@ -199,9 +212,111 @@ Apply via `pg < docs/migration-day3.sql` or paste into psql.
 
 6. **From the phone in airplane mode**: tap an emoji and submit → UI shows `Saved — will sync`, badge `1 pending`. Disable airplane mode → within seconds, badge → 0 and `Logged ✓` (after a re-tap or auto-drain in Phase 3) and the row appears in Postgres.
 
-## Failure modes to watch
+## Failure modes to watch (mood)
 
 - `401` from auth IF → token mismatch between `.env.local` and `MOOD_LOG_AUTH_TOKEN` in n8n.
 - Postgres FK or constraint error → confirm table exists and `rating` is in 1..5.
 - File write `EACCES` → vault subdir ownership; `chown -R 1000:1000`.
 - File written but invisible in Obsidian → vault Git auto-pull cron interval; manual `git pull` in vault.
+
+---
+
+## Calendar — Day 4
+
+A separate n8n workflow keeps mood/calendar isolated for debugging.
+
+### Webhook contract
+
+- **Prod URL**: `https://n8n.srv1536472.hstgr.cloud/webhook/calendar-block`
+- **Method**: `POST`
+- **Headers**: same as mood (`Content-Type: application/json`, `X-Auth-Token: <shared secret>`)
+- **Body**:
+  ```json
+  {
+    "client_id": "5b4f2a1e-9c0d-4a8b-bc31-7e6f1d2a3b4c",
+    "title": "Build",
+    "start_time": "2026-05-07T15:00:00+05:30",
+    "end_time": "2026-05-07T16:00:00+05:30",
+    "timezone": "Asia/Kolkata"
+  }
+  ```
+  `start_time` / `end_time` are RFC3339 with explicit `+05:30` offset. `title` is one of the V1 chips (`Build`, `Chill`, `Amrutha`, `Chores`, `Admin`) but the backend doesn't validate — keep validation client-side.
+
+### n8n workflow — `calendar-block`
+
+Four nodes after the Webhook trigger.
+
+#### 1. Webhook node
+
+| Field | Value |
+| --- | --- |
+| HTTP Method | `POST` |
+| Path | `calendar-block` |
+| Response Mode | `Using Respond to Webhook Node` |
+| Allowed Origins (CORS) | `https://app.srv1536472.hstgr.cloud` |
+
+#### 2. IF node — auth check (same as mood)
+
+```
+{{$json["headers"]["x-auth-token"]}} == {{$env.MOOD_LOG_AUTH_TOKEN}}
+```
+
+- TRUE → continue.
+- FALSE → `Respond to Webhook` returning `401`.
+
+#### 3. Google Calendar node — Create Event
+
+| Field | Value |
+| --- | --- |
+| Credential | existing Google Calendar credential |
+| Resource | `Event` |
+| Operation | `Create` |
+| Calendar | `Primary` (or specific calendar ID) |
+| Start | `={{$json.body.start_time}}` |
+| End | `={{$json.body.end_time}}` |
+| Use Default Reminders | `true` |
+| Additional Fields → Summary | `={{$json.body.title}}` |
+| Additional Fields → Time Zone | `={{$json.body.timezone}}` |
+
+#### 4. Respond to Webhook (TRUE branch terminus)
+
+Status `200`, body:
+
+```json
+{
+  "ok": true,
+  "client_id": "{{$json.body.client_id}}",
+  "event_id": "{{$node[\"Google Calendar\"].json.id}}"
+}
+```
+
+### Idempotency note (Day 4)
+
+n8n's `Create Event` maps to GCal `events.insert`, which doesn't accept `iCalUID`. For V1 we rely on the queue: entries are `markDone`'d only after a 200, so duplicates only occur when a 200 response is lost in transit (rare). If it becomes a real problem, switch to `events.import` via an n8n HTTP Request node and pass `client_id@sundaros` as `iCalUID`.
+
+### Calendar test plan
+
+1. Activate the workflow.
+2. From Mac (substitute `$TOKEN`):
+   ```bash
+   curl -i -X POST https://n8n.srv1536472.hstgr.cloud/webhook/calendar-block \
+     -H 'Content-Type: application/json' \
+     -H "X-Auth-Token: $TOKEN" \
+     -d '{
+       "client_id": "00000000-0000-4000-8000-000000000001",
+       "title": "Test Block",
+       "start_time": "2026-05-07T15:00:00+05:30",
+       "end_time": "2026-05-07T16:00:00+05:30",
+       "timezone": "Asia/Kolkata"
+     }'
+   ```
+3. Expect `200` with `client_id` echoed and a non-empty `event_id`.
+4. Open Google Calendar — event "Test Block" should be at 3:00–4:00 PM IST.
+5. **Delete the test event** before app-side testing.
+6. From the PWA: Calendar tab → Submit (defaults) → event appears within ~3s, app shows `Scheduled ✓`.
+
+### Failure modes to watch (calendar)
+
+- `401` → token mismatch (same as mood).
+- `200` but no GCal event → check the n8n execution log; the GCal node throws auth errors that aren't propagated to the webhook response. Most common cause is an expired GCal credential — re-auth in n8n's Credentials section.
+- Wrong wall-clock time on event → timezone mismatch. Always pass `+05:30` in `start_time` / `end_time`, and `Asia/Kolkata` as `timezone`. Don't let `formatForGCal` handle anything except `Asia/Kolkata` until we explicitly add a tz selector to the UI.

@@ -1,4 +1,4 @@
-import { postMood, type MoodPayload } from './api';
+import { postCalendar, postMood, type CalendarPayload, type MoodPayload } from './api';
 import {
   getPending,
   incrementAttempts,
@@ -27,11 +27,15 @@ export async function drainQueue(): Promise<{ sent: number; failed: number }> {
   return { sent, failed };
 }
 
+const dispatchers: {
+  [K in QueuedEntry['type']]: (payload: QueuedEntry['payload']) => Promise<void>;
+} = {
+  mood: (payload) => postMood(payload as unknown as MoodPayload),
+  calendar: (payload) => postCalendar(payload as unknown as CalendarPayload),
+};
+
 async function dispatch(entry: QueuedEntry): Promise<void> {
-  switch (entry.type) {
-    case 'mood':
-      return postMood(entry.payload as unknown as MoodPayload);
-    case 'calendar':
-      throw new Error('Calendar dispatch lands on Day 4');
-  }
+  const fn = dispatchers[entry.type];
+  if (!fn) throw new Error(`No dispatcher for entry type: ${entry.type}`);
+  return fn(entry.payload);
 }

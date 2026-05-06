@@ -1,5 +1,7 @@
-// Webhook client. Stays a thin POST wrapper; queue + drain logic lives in
-// src/lib/queue.ts and src/lib/sync.ts.
+// Flow-specific webhook clients. Pure dispatch — auth, retries, and queue
+// behaviour live elsewhere (webhookClient.ts, sync.ts, queue.ts).
+
+import { postJson } from './webhookClient';
 
 export type MoodPayload = {
   client_id: string;
@@ -8,24 +10,21 @@ export type MoodPayload = {
   client_timestamp: string;
 };
 
-const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL;
-const AUTH_TOKEN = import.meta.env.VITE_AUTH_TOKEN;
+export type CalendarPayload = {
+  client_id: string;
+  title: string;
+  start_time: string; // RFC3339 with offset, e.g. "2026-05-07T15:00:00+05:30"
+  end_time: string;
+  timezone: string; // IANA name, e.g. "Asia/Kolkata"
+};
+
+const MOOD_URL = import.meta.env.VITE_WEBHOOK_URL;
+const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
 
 export async function postMood(payload: MoodPayload): Promise<void> {
-  if (!WEBHOOK_URL || !AUTH_TOKEN) {
-    throw new Error('Missing VITE_WEBHOOK_URL or VITE_AUTH_TOKEN in env');
-  }
+  await postJson(MOOD_URL, payload);
+}
 
-  const res = await fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Auth-Token': AUTH_TOKEN,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Webhook ${res.status}: ${await res.text().catch(() => '')}`);
-  }
+export async function postCalendar(payload: CalendarPayload): Promise<void> {
+  await postJson(CALENDAR_URL, payload);
 }
