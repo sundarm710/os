@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { type MoodPayload } from '../lib/api';
-import { enqueue, getPending, newClientId } from '../lib/queue';
+import { enqueue, newClientId } from '../lib/queue';
 import { drainQueue } from '../lib/sync';
+import { usePendingQueue } from '../lib/usePendingQueue';
 
 const EMOJIS: { rating: MoodPayload['rating']; emoji: string; label: string }[] = [
   { rating: 1, emoji: '😞', label: 'Awful' },
@@ -42,12 +43,12 @@ export default function Mood() {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [lastLoggedAt, setLastLoggedAt] = useState<string | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
+
+  const { pendingCount, stuckCount } = usePendingQueue();
 
   useEffect(() => {
     const stored = localStorage.getItem(LAST_LOGGED_KEY);
     if (stored) setLastLoggedAt(stored);
-    void refreshPendingCount();
   }, []);
 
   useEffect(() => {
@@ -55,11 +56,6 @@ export default function Mood() {
     const id = setInterval(() => setLastLoggedAt((v) => v), 60_000);
     return () => clearInterval(id);
   }, [lastLoggedAt]);
-
-  async function refreshPendingCount() {
-    const pending = await getPending();
-    setPendingCount(pending.length);
-  }
 
   const canSubmit = selected !== null && status !== 'sending';
 
@@ -77,14 +73,10 @@ export default function Mood() {
     };
 
     try {
-      // Durable first — never lose a tap.
       await enqueue('mood', payload);
-      await refreshPendingCount();
 
-      // Then try to send. drain handles all pending entries oldest-first.
       vibrate(40);
       const { sent, failed } = await drainQueue();
-      await refreshPendingCount();
 
       if (failed === 0 && sent > 0) {
         localStorage.setItem(LAST_LOGGED_KEY, payload.client_timestamp);
@@ -92,7 +84,6 @@ export default function Mood() {
         setStatus('sent');
         vibrate([60, 80, 120]);
       } else {
-        // Still queued — network down or endpoint failing.
         setStatus('queued');
       }
 
@@ -119,16 +110,9 @@ export default function Mood() {
   return (
     <section className="flex flex-col gap-6">
       <header>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">How are you?</h1>
-          {pendingCount > 0 && (
-            <span
-              className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300"
-              title="Items waiting to sync"
-            >
-              {pendingCount} pending
-            </span>
-          )}
+          <QueueBadge pendingCount={pendingCount} stuckCount={stuckCount} />
         </div>
         <p className="mt-1 text-sm text-slate-400">
           Pick an emoji, add a note if you want, then submit.
@@ -216,5 +200,33 @@ export default function Mood() {
         )}
       </div>
     </section>
+  );
+}
+
+function QueueBadge({
+  pendingCount,
+  stuckCount,
+}: {
+  pendingCount: number;
+  stuckCount: number;
+}) {
+  if (pendingCount === 0) return null;
+  const isStuck = stuckCount > 0;
+  return (
+    <span
+      className={[
+        'rounded-full px-2 py-0.5 text-xs font-medium',
+        isStuck
+          ? 'bg-rose-500/20 text-rose-300'
+          : 'bg-amber-500/20 text-amber-300',
+      ].join(' ')}
+      title={
+        isStuck
+          ? 'Stuck — failing to sync after multiple attempts'
+          : 'Items waiting to sync'
+      }
+    >
+      {pendingCount} {isStuck ? 'stuck' : 'pending'}
+    </span>
   );
 }
