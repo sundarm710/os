@@ -11,7 +11,7 @@ export const STUCK_ATTEMPT_THRESHOLD = 5;
 
 export type QueuedEntry<TPayload = Record<string, unknown>> = {
   id: string;
-  type: 'mood' | 'calendar';
+  type: 'journal' | 'calendar';
   payload: TPayload;
   queued_at: string;
   attempts: number;

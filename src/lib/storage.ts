@@ -2,7 +2,7 @@
 // avoid stringly-typed key collisions across files.
 
 const KEYS = {
-  moodLastLoggedAt: 'mood:lastLoggedAt',
+  journalLastLoggedAt: 'journal:lastLoggedAt',
   calendarLastTitle: 'calendar:lastTitle',
 } as const;
 

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Single-user PWA that complements an existing Telegram-based "Sundar OS." Telegram remains the verbose natural-language input layer; this app handles **structured, low-friction taps** — capture flows where typing is the bottleneck. V1 is two flows: **mood log + calendar block, both live**. Out of scope for V1: notifications, history views, editing past entries, multi-user, auth beyond a shared secret.
+Single-user PWA that complements an existing Telegram-based "Sundar OS." Telegram remains the verbose natural-language input layer; this app handles **structured, low-friction taps** — capture flows where typing is the bottleneck. V1 is two flows: **journal log + calendar block, both live**. Out of scope for V1: notifications, history views, editing past entries, multi-user, auth beyond a shared secret.
+
+The journal flow composes a single `text` body in the frontend (including any `[mood: N]` prefix when an emoji is selected) and POSTs it to n8n, which only prepends the timestamp and writes to the daily note's `thought_log::` line. Mood selection is optional; the prompt-chip set on the page is geared at ADHD-style atomic capture.
 
 ## Commands
 
@@ -51,10 +53,10 @@ Layered, dependency flows one way (UI → hooks → lib → idb-keyval/fetch). L
 | `lib/queue.ts` | Single-key IDB array (`sundar:queue:v1`), pub/sub for reactive UI, `STUCK_ATTEMPT_THRESHOLD = 5` | Network calls, payload construction |
 | `lib/sync.ts` | `drainQueue()` — oldest-first, **stops on first failure**. Dispatch table keyed by `entry.type`. | Anything React |
 | `lib/webhookClient.ts` | Generic `postJson(url, payload)` — auth header, JSON body, `WebhookError` mapping. Reads token at call time. | Flow-specific URLs or types |
-| `lib/api.ts` | Flow-specific wrappers (`postMood`, `postCalendar`) atop `webhookClient`. URLs from env vars. | Retry/queue logic |
+| `lib/api.ts` | Flow-specific wrappers (`postJournal`, `postCalendar`, `fetchCalendarEvents`) atop `webhookClient`. URLs from env vars. | Retry/queue logic |
 | `lib/time.ts` | Pure time math (`nextQuarterHour`, `snapToQuarterHour`, `addMinutes`, `formatTime`, `formatForGCal`, `formatRelative`). Asia/Kolkata everywhere. | React, side-effects |
 | `lib/haptic.ts` | Named haptic patterns (`tap`, `submitStart`, `successRamp`). Single `haptic(name)` API. | Anywhere `navigator.vibrate` is called directly |
-| `lib/storage.ts` | Typed `localStorage` wrapper with key constants (`moodLastLoggedAt`, `calendarLastTitle`). | Stringly-typed `localStorage.getItem` calls |
+| `lib/storage.ts` | Typed `localStorage` wrapper with key constants (`journalLastLoggedAt`, `calendarLastTitle`). | Stringly-typed `localStorage.getItem` calls |
 | `lib/useSubmission.ts` | Shared submission state machine (`idle/sending/sent/queued/error`). Owns enqueue+drain+haptics. | Form state |
 | `lib/useDrainQueue.ts` | Mount-once hook in `App.tsx`. Drains on mount + `online` + `visibilitychange`. | Per-page logic |
 | `lib/usePendingQueue.ts` | Reactive snapshot (`pendingCount`, `stuckCount`) via `subscribe`. | Mutations |
@@ -101,8 +103,9 @@ This app pretends UTC doesn't exist for display purposes. All user-facing times 
 
 `.env.local` (gitignored), seeded from `.env.example`:
 ```
-VITE_WEBHOOK_URL=https://n8n.srv1536472.hstgr.cloud/webhook/mood-log
+VITE_WEBHOOK_JOURNAL_URL=https://n8n.srv1536472.hstgr.cloud/webhook/journal-log
 VITE_WEBHOOK_CALENDAR_URL=https://n8n.srv1536472.hstgr.cloud/webhook/calendar-block
+VITE_WEBHOOK_CALENDAR_FETCH_URL=https://n8n.srv1536472.hstgr.cloud/webhook/calendar-fetch
 VITE_AUTH_TOKEN=<shared secret matching MOOD_LOG_AUTH_TOKEN on n8n>
 ```
 

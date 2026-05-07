@@ -22,21 +22,21 @@ describe('queue', () => {
   describe('enqueue', () => {
     it('persists an entry with shared id and zero attempts', async () => {
       const client_id = newClientId();
-      await enqueue('mood', { client_id, rating: 4 });
+      await enqueue('journal', { client_id, rating: 4 });
       const pending = await getPending();
       expect(pending).toHaveLength(1);
       expect(pending[0]?.id).toBe(client_id);
-      expect(pending[0]?.type).toBe('mood');
+      expect(pending[0]?.type).toBe('journal');
       expect(pending[0]?.attempts).toBe(0);
       expect(pending[0]?.queued_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     });
 
     it('preserves FIFO order across multiple enqueues', async () => {
-      await enqueue('mood', { client_id: newClientId(), rating: 1 });
+      await enqueue('journal', { client_id: newClientId(), rating: 1 });
       await enqueue('calendar', { client_id: newClientId(), title: 'a' });
-      await enqueue('mood', { client_id: newClientId(), rating: 2 });
+      await enqueue('journal', { client_id: newClientId(), rating: 2 });
       const pending = await getPending();
-      expect(pending.map((p) => p.type)).toEqual(['mood', 'calendar', 'mood']);
+      expect(pending.map((p) => p.type)).toEqual(['journal', 'calendar', 'journal']);
     });
   });
 
@@ -44,8 +44,8 @@ describe('queue', () => {
     it('removes only the matching entry', async () => {
       const a = newClientId();
       const b = newClientId();
-      await enqueue('mood', { client_id: a, rating: 4 });
-      await enqueue('mood', { client_id: b, rating: 5 });
+      await enqueue('journal', { client_id: a, rating: 4 });
+      await enqueue('journal', { client_id: b, rating: 5 });
       await markDone(a);
       const pending = await getPending();
       expect(pending).toHaveLength(1);
@@ -53,7 +53,7 @@ describe('queue', () => {
     });
 
     it('is a no-op for unknown ids', async () => {
-      await enqueue('mood', { client_id: newClientId(), rating: 4 });
+      await enqueue('journal', { client_id: newClientId(), rating: 4 });
       await markDone('does-not-exist');
       expect((await getPending()).length).toBe(1);
     });
@@ -62,7 +62,7 @@ describe('queue', () => {
   describe('incrementAttempts', () => {
     it('bumps counter and records last_attempt_at', async () => {
       const id = newClientId();
-      await enqueue('mood', { client_id: id, rating: 4 });
+      await enqueue('journal', { client_id: id, rating: 4 });
       await incrementAttempts(id);
       await incrementAttempts(id);
       const [entry] = await getPending();
@@ -72,7 +72,7 @@ describe('queue', () => {
 
     it('crosses STUCK_ATTEMPT_THRESHOLD only after enough increments', async () => {
       const id = newClientId();
-      await enqueue('mood', { client_id: id, rating: 4 });
+      await enqueue('journal', { client_id: id, rating: 4 });
       for (let i = 0; i < STUCK_ATTEMPT_THRESHOLD - 1; i++) {
         await incrementAttempts(id);
       }
@@ -93,7 +93,7 @@ describe('queue', () => {
       });
 
       const id = newClientId();
-      await enqueue('mood', { client_id: id, rating: 4 });
+      await enqueue('journal', { client_id: id, rating: 4 });
       await incrementAttempts(id);
       await markDone(id);
       unsub();
@@ -107,7 +107,7 @@ describe('queue', () => {
         count += 1;
       });
       unsub();
-      await enqueue('mood', { client_id: newClientId(), rating: 4 });
+      await enqueue('journal', { client_id: newClientId(), rating: 4 });
       expect(count).toBe(0);
     });
   });

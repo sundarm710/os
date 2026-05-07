@@ -3,11 +3,13 @@
 
 import { postJson } from './webhookClient';
 
-export type MoodPayload = {
+// The PWA composes the full thought_log body (including any "[mood: N]"
+// prefix) and hands it to n8n as a single string. n8n only prepends the
+// timestamp and writes to vault — it does not parse the text.
+export type JournalPayload = {
   client_id: string;
-  rating: 1 | 2 | 3 | 4 | 5;
-  note: string | null;
   client_timestamp: string;
+  text: string;
 };
 
 export type CalendarPayload = {
@@ -34,12 +36,12 @@ type FetchResponse =
   | { ok: true; count: number; events: CalendarEvent[] }
   | { ok: false; reason: string };
 
-const MOOD_URL = import.meta.env.VITE_WEBHOOK_URL;
+const JOURNAL_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_URL;
 const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
 const CALENDAR_FETCH_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_FETCH_URL;
 
-export async function postMood(payload: MoodPayload): Promise<void> {
-  await postJson(MOOD_URL, payload);
+export async function postJournal(payload: JournalPayload): Promise<void> {
+  await postJson(JOURNAL_URL, payload);
 }
 
 export async function postCalendar(payload: CalendarPayload): Promise<void> {

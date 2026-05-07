@@ -6,7 +6,7 @@ type Props = {
 };
 
 const TABS: { id: Page; label: string; icon: string }[] = [
-  { id: 'mood', label: 'Mood', icon: '🙂' },
+  { id: 'journal', label: 'Journal', icon: '📓' },
   { id: 'calendar', label: 'Calendar', icon: '📅' },
 ];
 

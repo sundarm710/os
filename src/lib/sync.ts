@@ -1,4 +1,4 @@
-import { postCalendar, postMood, type CalendarPayload, type MoodPayload } from './api';
+import { postCalendar, postJournal, type CalendarPayload, type JournalPayload } from './api';
 import {
   getPending,
   incrementAttempts,
@@ -30,7 +30,7 @@ export async function drainQueue(): Promise<{ sent: number; failed: number }> {
 const dispatchers: {
   [K in QueuedEntry['type']]: (payload: QueuedEntry['payload']) => Promise<void>;
 } = {
-  mood: (payload) => postMood(payload as unknown as MoodPayload),
+  journal: (payload) => postJournal(payload as unknown as JournalPayload),
   calendar: (payload) => postCalendar(payload as unknown as CalendarPayload),
 };
 

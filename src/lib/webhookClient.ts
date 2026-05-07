@@ -1,5 +1,5 @@
 // Generic webhook POST. Knows about auth + JSON, knows nothing about flows.
-// All flow-specific clients (postMood, postCalendar) compose this.
+// All flow-specific clients (postJournal, postCalendar) compose this.
 
 export class WebhookError extends Error {
   constructor(

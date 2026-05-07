@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear } from 'idb-keyval';
 
 // Mock the api module so we can drive dispatcher outcomes deterministically.
-const postMood = vi.fn();
+const postJournal = vi.fn();
 const postCalendar = vi.fn();
 vi.mock('./api', () => ({
-  postMood: (...args: unknown[]) => postMood(...args),
+  postJournal: (...args: unknown[]) => postJournal(...args),
   postCalendar: (...args: unknown[]) => postCalendar(...args),
 }));
 
@@ -15,7 +15,7 @@ import { enqueue, getPending, newClientId } from './queue';
 describe('drainQueue', () => {
   beforeEach(async () => {
     await clear();
-    postMood.mockReset();
+    postJournal.mockReset();
     postCalendar.mockReset();
   });
 
@@ -26,33 +26,33 @@ describe('drainQueue', () => {
   it('returns zero counts on empty queue', async () => {
     const out = await drainQueue();
     expect(out).toEqual({ sent: 0, failed: 0 });
-    expect(postMood).not.toHaveBeenCalled();
+    expect(postJournal).not.toHaveBeenCalled();
   });
 
   it('sends every entry and clears the queue when all succeed', async () => {
-    postMood.mockResolvedValue(undefined);
+    postJournal.mockResolvedValue(undefined);
     postCalendar.mockResolvedValue(undefined);
 
-    await enqueue('mood', { client_id: newClientId(), rating: 4 });
+    await enqueue('journal', { client_id: newClientId(), rating: 4 });
     await enqueue('calendar', { client_id: newClientId(), title: 'Build' });
-    await enqueue('mood', { client_id: newClientId(), rating: 5 });
+    await enqueue('journal', { client_id: newClientId(), rating: 5 });
 
     const out = await drainQueue();
 
     expect(out).toEqual({ sent: 3, failed: 0 });
-    expect(postMood).toHaveBeenCalledTimes(2);
+    expect(postJournal).toHaveBeenCalledTimes(2);
     expect(postCalendar).toHaveBeenCalledTimes(1);
     expect(await getPending()).toHaveLength(0);
   });
 
   it('stops on first failure and leaves remaining entries queued', async () => {
-    postMood
+    postJournal
       .mockResolvedValueOnce(undefined) // first ok
       .mockRejectedValueOnce(new Error('boom')); // second fails — drain stops
 
-    await enqueue('mood', { client_id: newClientId(), rating: 4 });
-    await enqueue('mood', { client_id: newClientId(), rating: 4 });
-    await enqueue('mood', { client_id: newClientId(), rating: 4 });
+    await enqueue('journal', { client_id: newClientId(), rating: 4 });
+    await enqueue('journal', { client_id: newClientId(), rating: 4 });
+    await enqueue('journal', { client_id: newClientId(), rating: 4 });
 
     const out = await drainQueue();
 
@@ -61,13 +61,13 @@ describe('drainQueue', () => {
     const pending = await getPending();
     expect(pending).toHaveLength(2);
     // Don't keep hammering after first failure.
-    expect(postMood).toHaveBeenCalledTimes(2);
+    expect(postJournal).toHaveBeenCalledTimes(2);
   });
 
   it('increments attempts on the failing entry', async () => {
-    postMood.mockRejectedValue(new Error('500'));
+    postJournal.mockRejectedValue(new Error('500'));
     const id = newClientId();
-    await enqueue('mood', { client_id: id, rating: 4 });
+    await enqueue('journal', { client_id: id, rating: 4 });
 
     await drainQueue();
     await drainQueue();
@@ -78,15 +78,15 @@ describe('drainQueue', () => {
   });
 
   it('processes oldest-first', async () => {
-    postMood.mockResolvedValue(undefined);
+    postJournal.mockResolvedValue(undefined);
     const a = newClientId();
     const b = newClientId();
-    await enqueue('mood', { client_id: a, rating: 1 });
-    await enqueue('mood', { client_id: b, rating: 2 });
+    await enqueue('journal', { client_id: a, rating: 1 });
+    await enqueue('journal', { client_id: b, rating: 2 });
 
     await drainQueue();
 
-    const calls = postMood.mock.calls.map((c) => (c[0] as { client_id: string }).client_id);
+    const calls = postJournal.mock.calls.map((c) => (c[0] as { client_id: string }).client_id);
     expect(calls).toEqual([a, b]);
   });
 });
