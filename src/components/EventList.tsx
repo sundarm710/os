@@ -1,3 +1,4 @@
+import { forwardRef, Fragment, useLayoutEffect, useRef } from 'react';
 import { type CalendarEvent } from '../lib/api';
 import { formatDayLabel, formatTime, kolkataDateString } from '../lib/time';
 
@@ -7,28 +8,52 @@ type PendingBlock = {
   title: string;
 };
 
-type Item =
-  | { kind: 'event'; data: CalendarEvent; sortKey: number; allDay: boolean }
-  | { kind: 'pending'; data: PendingBlock; sortKey: number; allDay: false };
+type EventItem = {
+  kind: 'event';
+  data: CalendarEvent;
+  dayKey: string;
+  startMs: number; // for timed events; for all-day = midnight IST of start day
+  allDay: boolean;
+};
+
+type PendingItem = {
+  kind: 'pending';
+  data: PendingBlock;
+  dayKey: string;
+  startMs: number;
+  allDay: false;
+};
+
+type Item = EventItem | PendingItem;
 
 interface Props {
   events: CalendarEvent[];
-  day: Date;
   pending?: PendingBlock;
   loading?: boolean;
   error?: string | null;
 }
 
-export function EventList({ events, day, pending, loading, error }: Props) {
-  const dayKey = kolkataDateString(day);
-  const items = buildItems(events, dayKey, pending);
-  const now = Date.now();
+export function EventList({ events, pending, loading, error }: Props) {
+  const items = buildItems(events, pending);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pendingRef = useRef<HTMLLIElement>(null);
+
+  // Centre the phantom row whenever the pending slot or the underlying event
+  // list shifts. useLayoutEffect so the recentre happens before paint — no
+  // visible jump as the user drags the Start dial.
+  useLayoutEffect(() => {
+    const el = pendingRef.current;
+    const container = containerRef.current;
+    if (!el || !container) return;
+    container.scrollTop =
+      el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2;
+  }, [pending?.start.getTime(), pending?.end.getTime(), events]);
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <span className="text-xs uppercase tracking-wide text-slate-400">
-          {formatDayLabel(day)}
+          Schedule
         </span>
         {loading && (
           <span className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -43,68 +68,63 @@ export function EventList({ events, day, pending, loading, error }: Props) {
         </p>
       )}
 
-      {!error && items.length === 0 && (
-        <p className="text-xs text-slate-500">Nothing scheduled.</p>
-      )}
-
-      <ul className="flex flex-col gap-1.5">
-        {items.map((item) => (
-          <Row key={rowKey(item)} item={item} now={now} />
-        ))}
-      </ul>
+      <div
+        ref={containerRef}
+        className="relative h-72 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/30"
+      >
+        {items.length === 0 && !error ? (
+          <p className="px-3 py-3 text-xs text-slate-500">
+            Nothing scheduled in this window.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1 p-2">
+            {items.map((item, idx) => {
+              const prev = items[idx - 1];
+              const showDivider = !prev || prev.dayKey !== item.dayKey;
+              if (item.kind === 'pending') {
+                return (
+                  <Fragment key="__pending">
+                    {showDivider && (
+                      <DayDivider label={formatDayLabel(item.data.start)} />
+                    )}
+                    <PendingRow ref={pendingRef} pending={item.data} />
+                  </Fragment>
+                );
+              }
+              return (
+                <Fragment key={item.data.id}>
+                  {showDivider && (
+                    <DayDivider label={dayLabelForEvent(item)} />
+                  )}
+                  <EventRow event={item.data} allDay={item.allDay} />
+                </Fragment>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
-function buildItems(
-  events: CalendarEvent[],
-  dayKey: string,
-  pending: PendingBlock | undefined,
-): Item[] {
-  const items: Item[] = [];
-
-  for (const event of events) {
-    if (event.allDay) {
-      // GCal all-day end is exclusive: a one-day event has start=YYYY-MM-DD,
-      // end=next day. A multi-day event spans [start, end).
-      if (event.start <= dayKey && dayKey < event.end) {
-        items.push({ kind: 'event', data: event, sortKey: -Infinity, allDay: true });
-      }
-      continue;
-    }
-    const startMs = Date.parse(event.start);
-    if (Number.isNaN(startMs)) continue;
-    if (kolkataDateString(new Date(startMs)) === dayKey) {
-      items.push({ kind: 'event', data: event, sortKey: startMs, allDay: false });
-    }
-  }
-
-  if (pending) {
-    items.push({
-      kind: 'pending',
-      data: pending,
-      sortKey: pending.start.getTime(),
-      allDay: false,
-    });
-  }
-
-  items.sort((a, b) => {
-    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-    return a.sortKey - b.sortKey;
-  });
-
-  return items;
+function DayDivider({ label }: { label: string }) {
+  return (
+    <li className="flex items-center gap-2 px-1 pb-1 pt-2 text-[10px] uppercase tracking-wider text-slate-500 first:pt-0">
+      <span className="h-px flex-1 bg-slate-700" />
+      <span>{label}</span>
+      <span className="h-px flex-1 bg-slate-700" />
+    </li>
+  );
 }
 
-function rowKey(item: Item): string {
-  return item.kind === 'pending' ? '__pending' : `${item.data.id}`;
-}
-
-function Row({ item, now }: { item: Item; now: number }) {
-  if (item.kind === 'pending') {
-    const { start, end, title } = item.data;
+const PendingRow = forwardRef<HTMLLIElement, { pending: PendingBlock }>(
+  function PendingRow({ pending }, ref) {
+    const { start, end, title } = pending;
     return (
-      <li className="rounded-lg border border-dashed border-emerald-400 bg-emerald-400/10 px-3 py-2">
+      <li
+        ref={ref}
+        className="rounded-lg border border-dashed border-emerald-400 bg-emerald-400/10 px-3 py-2"
+      >
         <div className="flex items-baseline justify-between gap-3">
           <span className="truncate text-sm font-medium text-emerald-100">
             {title || 'Untitled'}
@@ -118,11 +138,17 @@ function Row({ item, now }: { item: Item; now: number }) {
         </span>
       </li>
     );
-  }
+  },
+);
 
-  const event = item.data;
-
-  if (event.allDay) {
+function EventRow({
+  event,
+  allDay,
+}: {
+  event: CalendarEvent;
+  allDay: boolean;
+}) {
+  if (allDay) {
     return (
       <li className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
         <div className="flex items-baseline justify-between gap-3">
@@ -139,7 +165,7 @@ function Row({ item, now }: { item: Item; now: number }) {
 
   const startD = new Date(event.start);
   const endD = new Date(event.end);
-  const past = endD.getTime() < now;
+  const past = endD.getTime() < Date.now();
   return (
     <li
       className={[
@@ -162,4 +188,66 @@ function Row({ item, now }: { item: Item; now: number }) {
       )}
     </li>
   );
+}
+
+function buildItems(
+  events: CalendarEvent[],
+  pending: PendingBlock | undefined,
+): Item[] {
+  const items: Item[] = [];
+
+  for (const event of events) {
+    if (event.allDay) {
+      const dayMs = istMidnightMs(event.start);
+      if (Number.isNaN(dayMs)) continue;
+      items.push({
+        kind: 'event',
+        data: event,
+        dayKey: event.start,
+        startMs: dayMs,
+        allDay: true,
+      });
+      continue;
+    }
+    const startMs = Date.parse(event.start);
+    if (Number.isNaN(startMs)) continue;
+    items.push({
+      kind: 'event',
+      data: event,
+      dayKey: kolkataDateString(new Date(startMs)),
+      startMs,
+      allDay: false,
+    });
+  }
+
+  if (pending) {
+    items.push({
+      kind: 'pending',
+      data: pending,
+      dayKey: kolkataDateString(pending.start),
+      startMs: pending.start.getTime(),
+      allDay: false,
+    });
+  }
+
+  items.sort((a, b) => {
+    if (a.dayKey !== b.dayKey) {
+      return istMidnightMs(a.dayKey) - istMidnightMs(b.dayKey);
+    }
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    return a.startMs - b.startMs;
+  });
+
+  return items;
+}
+
+function istMidnightMs(yyyymmdd: string): number {
+  return Date.parse(`${yyyymmdd}T00:00:00+05:30`);
+}
+
+function dayLabelForEvent(item: EventItem): string {
+  const d = item.allDay
+    ? new Date(istMidnightMs(item.data.start))
+    : new Date(item.data.start);
+  return formatDayLabel(d);
 }

@@ -7,6 +7,7 @@ import {
   formatDateTime,
   formatForGCal,
   formatTime,
+  kolkataDateString,
   nextQuarterHour,
   previousQuarterHour,
   snapToQuarterHour,
@@ -87,10 +88,7 @@ export default function Calendar() {
 
   return (
     <section className="flex flex-col gap-6">
-      <PageHeader
-        title="Calendar Block"
-        subtitle="Tap title, drag dials up/down, submit."
-      />
+      <PageHeader title="Calendar Block" />
 
       <div className="flex flex-col gap-2">
         {TITLE_ROWS.map((row, idx) => (
@@ -155,11 +153,10 @@ export default function Calendar() {
         />
       </div>
 
-      <SummaryFooter start={start} end={end} timezone={TIMEZONE} />
+      <SummaryFooter start={start} end={end} />
 
       <EventList
         events={events}
-        day={start}
         pending={{ start, end, title: trimmedTitle }}
         loading={eventsLoading}
         error={eventsError}
@@ -182,30 +179,15 @@ export default function Calendar() {
   );
 }
 
-function SummaryFooter({
-  start,
-  end,
-  timezone,
-}: {
-  start: Date;
-  end: Date;
-  timezone: string;
-}) {
+function SummaryFooter({ start, end }: { start: Date; end: Date }) {
+  const sameDay = kolkataDateString(start) === kolkataDateString(end);
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs uppercase tracking-wide text-slate-500">Start</span>
-        <span className="font-medium tabular-nums text-slate-100">
-          {formatDateTime(start)}
-        </span>
+    <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-2 text-sm">
+      <div className="flex items-baseline justify-center gap-2 tabular-nums text-slate-100">
+        <span>{formatDateTime(start)}</span>
+        <span className="text-slate-500">→</span>
+        <span>{sameDay ? formatTime(end) : formatDateTime(end)}</span>
       </div>
-      <div className="mt-1 flex items-baseline justify-between">
-        <span className="text-xs uppercase tracking-wide text-slate-500">End</span>
-        <span className="font-medium tabular-nums text-slate-100">
-          {formatDateTime(end)}
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-slate-500">{timezone}</p>
     </div>
   );
 }
