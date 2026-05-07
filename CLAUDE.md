@@ -110,6 +110,7 @@ When adding a new flow: add a `VITE_WEBHOOK_*` env var, update `src/vite-env.d.t
 
 ## Conventions baked into prior sessions
 
+- **Commit and push after each change.** Once typecheck/tests pass for a coherent edit, commit with a focused message and `git push` to `origin/main` immediately — don't batch unrelated changes. The VPS pulls from `main`, so unpushed work is invisible to deploy.
 - **No backwards-compat shims.** This is a single-user app with no other consumers; if something needs to change, change it everywhere.
 - **No tests, no test framework.** Validate utilities with dev-only console assertions in the module itself.
 - **No comments explaining what code does.** Comments only for non-obvious *why* — e.g., `queue.ts` notes that `idb-keyval`'s atomic update prevents enqueue/markDone races; `vite.config.ts` notes the `/webhook` SW denylist exists because cached POSTs would corrupt user data.

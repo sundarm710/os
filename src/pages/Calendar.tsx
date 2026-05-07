@@ -23,36 +23,31 @@ const TITLE_ROWS = [
   ['Chill', 'Sleep', 'Chores'],
 ] as const;
 
-type Title = (typeof TITLE_ROWS)[number][number];
-
-const ALL_TITLES = TITLE_ROWS.flat() as readonly Title[];
-const DEFAULT_TITLE: Title = 'Build';
+const DEFAULT_TITLE = 'Build';
 const DEFAULT_DURATION_MIN = 30;
 const SHORT_DURATION_MIN = 15;
 const LONG_DURATION_MIN = 60;
 const STEP_MIN = 15;
 const TIMEZONE = 'Asia/Kolkata';
 
-function isTitle(v: string | null): v is Title {
-  return v !== null && (ALL_TITLES as readonly string[]).includes(v);
-}
-
-function initialTitle(): Title {
+function initialTitle(): string {
   const stored = readString('calendarLastTitle');
-  return isTitle(stored) ? stored : DEFAULT_TITLE;
+  return stored?.trim() ? stored : DEFAULT_TITLE;
 }
 
 export default function Calendar() {
-  const [title, setTitle] = useState<Title>(initialTitle);
+  const [title, setTitle] = useState<string>(initialTitle);
   const [start, setStart] = useState<Date>(() => nextQuarterHour(new Date()));
   const [durationMin, setDurationMin] = useState<number>(DEFAULT_DURATION_MIN);
 
   const { status, error, submit } = useSubmission<CalendarPayload>('calendar');
 
+  const trimmedTitle = title.trim();
   const end = addMinutes(start, durationMin);
   const isSending = status === 'sending';
+  const canSubmit = !isSending && trimmedTitle.length > 0;
 
-  function pickTitle(next: Title) {
+  function pickTitle(next: string) {
     haptic('tap');
     setTitle(next);
   }
@@ -66,14 +61,14 @@ export default function Calendar() {
   }
 
   async function handleSubmit() {
-    if (isSending) return;
+    if (!canSubmit) return;
     await submit(() => ({
-      title,
+      title: trimmedTitle,
       start_time: formatForGCal(start, TIMEZONE),
       end_time: formatForGCal(end, TIMEZONE),
       timezone: TIMEZONE,
     }));
-    writeString('calendarLastTitle', title);
+    writeString('calendarLastTitle', trimmedTitle);
     setStart(nextQuarterHour(end));
     setDurationMin(DEFAULT_DURATION_MIN);
   }
@@ -89,7 +84,7 @@ export default function Calendar() {
         {TITLE_ROWS.map((row, idx) => (
           <div key={idx} className="grid grid-cols-3 gap-2">
             {row.map((t) => {
-              const isActive = title === t;
+              const isActive = trimmedTitle === t;
               return (
                 <button
                   key={t}
@@ -110,6 +105,15 @@ export default function Calendar() {
             })}
           </div>
         ))}
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={isSending}
+          placeholder="Or type a custom title"
+          aria-label="Event title"
+          className="mt-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 disabled:opacity-60"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -144,7 +148,7 @@ export default function Calendar() {
       <SubmitButton
         label="Schedule"
         onSubmit={() => void handleSubmit()}
-        disabled={isSending}
+        disabled={!canSubmit}
         status={status}
         error={error}
       />
