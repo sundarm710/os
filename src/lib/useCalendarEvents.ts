@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchCalendarEvents, type CalendarEvent } from './api';
 
 const DAY_MS = 86_400_000;
-// Symmetric one-week window. Tighter scope keeps the timeline focused on
-// "now-ish" — the user can drag the Start dial up to 7 days either way.
-const PAST_DAYS = 7;
+// Tight window — past two days for context, next week for planning. Wider
+// ranges made the initial fetch perceptibly slow.
+const PAST_DAYS = 2;
 const FUTURE_DAYS = 7;
 
 export function useCalendarEvents() {
