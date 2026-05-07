@@ -2,11 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchCalendarEvents, type CalendarEvent } from './api';
 
 const DAY_MS = 86_400_000;
-// Wide window so dragging Start across roughly a month never runs off the
-// cached events. The endpoint default (now-2d → now+7d) is too tight in
-// practice — most users plan further ahead than that.
+// Symmetric one-week window. Tighter scope keeps the timeline focused on
+// "now-ish" — the user can drag the Start dial up to 7 days either way.
 const PAST_DAYS = 7;
-const FUTURE_DAYS = 30;
+const FUTURE_DAYS = 7;
 
 export function useCalendarEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
