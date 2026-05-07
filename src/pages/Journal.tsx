@@ -27,6 +27,10 @@ const PROMPTS: { label: string; prefix: string }[] = [
   { label: 'Win', prefix: 'Win: ' },
   { label: 'Idea', prefix: 'Idea: ' },
   { label: 'Energy', prefix: 'Energy: ' },
+  { label: 'To do', prefix: 'To do: ' },
+  { label: 'Changed my mind on', prefix: 'Changed my mind on: ' },
+  { label: 'Choices and consequences', prefix: 'Choices and consequences: ' },
+  { label: 'Amrutha', prefix: 'Amrutha: ' },
 ];
 
 const PLACEHOLDERS = [
