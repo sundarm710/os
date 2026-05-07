@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { type CalendarPayload } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { readString, writeString } from '../lib/storage';
@@ -11,8 +11,10 @@ import {
   previousQuarterHour,
   snapToQuarterHour,
 } from '../lib/time';
+import { useCalendarEvents } from '../lib/useCalendarEvents';
 import { useSubmission } from '../lib/useSubmission';
 import { DialRow } from '../components/DialRow';
+import { EventList } from '../components/EventList';
 import { PageHeader } from '../components/PageHeader';
 import { StatusLine } from '../components/StatusLine';
 import { SubmitButton } from '../components/SubmitButton';
@@ -41,11 +43,21 @@ export default function Calendar() {
   const [durationMin, setDurationMin] = useState<number>(DEFAULT_DURATION_MIN);
 
   const { status, error, submit } = useSubmission<CalendarPayload>('calendar');
+  const {
+    events,
+    loading: eventsLoading,
+    error: eventsError,
+    refresh: refreshEvents,
+  } = useCalendarEvents();
 
   const trimmedTitle = title.trim();
   const end = addMinutes(start, durationMin);
   const isSending = status === 'sending';
   const canSubmit = !isSending && trimmedTitle.length > 0;
+
+  useEffect(() => {
+    if (status === 'sent') void refreshEvents();
+  }, [status, refreshEvents]);
 
   function pickTitle(next: string) {
     haptic('tap');
@@ -144,6 +156,14 @@ export default function Calendar() {
       </div>
 
       <SummaryFooter start={start} end={end} timezone={TIMEZONE} />
+
+      <EventList
+        events={events}
+        day={start}
+        pending={{ start, end, title: trimmedTitle }}
+        loading={eventsLoading}
+        error={eventsError}
+      />
 
       <SubmitButton
         label="Schedule"

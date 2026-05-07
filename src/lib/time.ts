@@ -124,6 +124,37 @@ export function formatForGCal(d: Date, timezone: string): string {
 }
 
 /**
+ * YYYY-MM-DD for the wall-clock day in Asia/Kolkata. Used to match against
+ * GCal all-day event boundaries (which are inclusive-start, exclusive-end
+ * date strings) and to detect day rollover when the user drags the Start
+ * dial across midnight.
+ */
+export function kolkataDateString(d: Date): string {
+  const istMillis = d.getTime() + KOLKATA_OFFSET_MINUTES * 60_000;
+  const ist = new Date(istMillis);
+  const yyyy = ist.getUTCFullYear();
+  const mm = pad2(ist.getUTCMonth() + 1);
+  const dd = pad2(ist.getUTCDate());
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Human label for the day a Date falls on, in IST: "Today", "Tomorrow",
+ * "Yesterday", or fallback "May 9". Pure — caller passes `now` in tests.
+ */
+export function formatDayLabel(d: Date, now: Date = new Date()): string {
+  const dKey = kolkataDateString(d);
+  const todayKey = kolkataDateString(now);
+  if (dKey === todayKey) return 'Today';
+  if (dKey === kolkataDateString(addMinutes(now, 24 * 60))) return 'Tomorrow';
+  if (dKey === kolkataDateString(addMinutes(now, -24 * 60))) return 'Yesterday';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+}
+
+/**
  * Human-readable relative time, falling back to absolute when the gap exceeds
  * a day. Pure function — caller is responsible for re-rendering when "now"
  * changes (e.g. a 60s setInterval tick).

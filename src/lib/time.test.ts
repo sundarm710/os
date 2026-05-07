@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   addMinutes,
   formatDateTime,
+  formatDayLabel,
   formatForGCal,
   formatRelative,
   formatTime,
+  kolkataDateString,
   nextQuarterHour,
   previousQuarterHour,
   snapToQuarterHour,
@@ -168,6 +170,44 @@ describe('formatForGCal', () => {
     expect(() => formatForGCal(new Date(), 'America/New_York')).toThrow(
       /only supports 'Asia\/Kolkata'/,
     );
+  });
+});
+
+describe('kolkataDateString', () => {
+  it('returns the IST wall-clock day for a UTC instant in the same day', () => {
+    // 2026-05-07 15:00 IST = 2026-05-07 09:30 UTC
+    expect(kolkataDateString(new Date(Date.UTC(2026, 4, 7, 9, 30, 0)))).toBe('2026-05-07');
+  });
+
+  it('rolls into the next IST day before UTC midnight', () => {
+    // 2026-05-08 00:30 IST = 2026-05-07 19:00 UTC
+    expect(kolkataDateString(new Date(Date.UTC(2026, 4, 7, 19, 0, 0)))).toBe('2026-05-08');
+  });
+});
+
+describe('formatDayLabel', () => {
+  it('returns "Today" for a date on the same IST day as now', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    const same = new Date(Date.UTC(2026, 4, 7, 12, 0, 0));
+    expect(formatDayLabel(same, now)).toBe('Today');
+  });
+
+  it('returns "Tomorrow" for the next IST day', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    const next = new Date(Date.UTC(2026, 4, 8, 9, 30, 0));
+    expect(formatDayLabel(next, now)).toBe('Tomorrow');
+  });
+
+  it('returns "Yesterday" for the prior IST day', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    const prior = new Date(Date.UTC(2026, 4, 6, 9, 30, 0));
+    expect(formatDayLabel(prior, now)).toBe('Yesterday');
+  });
+
+  it('falls back to "MMM D" for further-out dates', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    const far = new Date(Date.UTC(2026, 4, 12, 9, 30, 0));
+    expect(formatDayLabel(far, now)).toBe('May 12');
   });
 });
 
