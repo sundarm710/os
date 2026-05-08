@@ -106,6 +106,7 @@ This app pretends UTC doesn't exist for display purposes. All user-facing times 
 VITE_WEBHOOK_JOURNAL_URL=https://n8n.srv1536472.hstgr.cloud/webhook/journal-log
 VITE_WEBHOOK_CALENDAR_URL=https://n8n.srv1536472.hstgr.cloud/webhook/calendar-block
 VITE_WEBHOOK_CALENDAR_FETCH_URL=https://n8n.srv1536472.hstgr.cloud/webhook/calendar-fetch
+VITE_WEBHOOK_TASKS_URL=https://n8n.srv1536472.hstgr.cloud/webhook/tasks
 VITE_AUTH_TOKEN=<shared secret matching MOOD_LOG_AUTH_TOKEN on n8n>
 ```
 

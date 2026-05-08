@@ -36,9 +36,35 @@ type FetchResponse =
   | { ok: true; count: number; events: CalendarEvent[] }
   | { ok: false; reason: string };
 
+export type TaskCategory =
+  | 'OVERDUE'
+  | 'TODAY'
+  | 'THIS_WEEK'
+  | 'FUTURE'
+  | 'NO_DATE';
+
+export type TaskStatus = 'open' | 'done';
+
+export type Task = {
+  id: string;
+  text: string;
+  project: string;
+  due: string | null; // YYYY-MM-DD or null
+  est: string | null;
+  priority: string | null;
+  depends_on: string | null;
+  is_routine: boolean;
+  status: TaskStatus;
+  category?: TaskCategory; // present on open tasks
+  completed?: string; // YYYY-MM-DD, present on done tasks
+};
+
+type TasksResponse = { tasks: Task[] };
+
 const JOURNAL_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_URL;
 const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
 const CALENDAR_FETCH_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_FETCH_URL;
+const TASKS_URL = import.meta.env.VITE_WEBHOOK_TASKS_URL;
 
 export async function postJournal(payload: JournalPayload): Promise<void> {
   await postJson(JOURNAL_URL, payload);
@@ -55,4 +81,16 @@ export async function fetchCalendarEvents(
   const data = (await res.json()) as FetchResponse;
   if (!data.ok) throw new Error(data.reason || 'calendar fetch failed');
   return data.events;
+}
+
+export async function fetchOpenTasks(): Promise<Task[]> {
+  const res = await postJson(TASKS_URL, { action: 'list' });
+  const data = (await res.json()) as TasksResponse;
+  return data.tasks ?? [];
+}
+
+export async function fetchDoneTasks(): Promise<Task[]> {
+  const res = await postJson(TASKS_URL, { action: 'list_done' });
+  const data = (await res.json()) as TasksResponse;
+  return data.tasks ?? [];
 }
