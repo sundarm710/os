@@ -94,3 +94,13 @@ export async function fetchDoneTasks(): Promise<Task[]> {
   const data = (await res.json()) as TasksResponse;
   return data.tasks ?? [];
 }
+
+type TaskActionRequest = { action: 'done'; id: string };
+type TaskActionResponse = { ok: true; task: Task } | { ok: false; error: string };
+
+export async function postTaskAction(request: TaskActionRequest): Promise<Task> {
+  const res = await postJson(TASKS_URL, request);
+  const data = (await res.json()) as TaskActionResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.task;
+}
