@@ -9,8 +9,8 @@ import { TaskCard } from '../components/TaskCard';
 const SECTION_ORDER: TaskCategory[] = [
   'OVERDUE',
   'TODAY',
-  'NO_DATE',
   'THIS_WEEK',
+  'NO_DATE',
   'FUTURE',
 ];
 

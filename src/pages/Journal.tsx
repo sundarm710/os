@@ -31,6 +31,8 @@ const PROMPTS: { label: string; prefix: string }[] = [
   { label: 'Changed my mind on', prefix: 'Changed my mind on: ' },
   { label: 'Choices and consequences', prefix: 'Choices and consequences: ' },
   { label: 'Amrutha', prefix: 'Amrutha: ' },
+  { label: 'TIL', prefix: 'TIL: ' },
+  { label: "What I'm Upto", prefix: "What I'm Upto: " },
 ];
 
 const PLACEHOLDERS = [
