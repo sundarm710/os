@@ -9,6 +9,7 @@ import {
   kolkataDateString,
   nextQuarterHour,
   previousQuarterHour,
+  shiftKolkataDate,
   snapToQuarterHour,
 } from './time';
 
@@ -182,6 +183,28 @@ describe('kolkataDateString', () => {
   it('rolls into the next IST day before UTC midnight', () => {
     // 2026-05-08 00:30 IST = 2026-05-07 19:00 UTC
     expect(kolkataDateString(new Date(Date.UTC(2026, 4, 7, 19, 0, 0)))).toBe('2026-05-08');
+  });
+});
+
+describe('shiftKolkataDate', () => {
+  it('returns the same IST day for 0 shift', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    expect(shiftKolkataDate(now, 0)).toBe('2026-05-07');
+  });
+
+  it('returns tomorrow IST for +1', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    expect(shiftKolkataDate(now, 1)).toBe('2026-05-08');
+  });
+
+  it('returns one week ahead for +7', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    expect(shiftKolkataDate(now, 7)).toBe('2026-05-14');
+  });
+
+  it('handles past shifts', () => {
+    const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
+    expect(shiftKolkataDate(now, -1)).toBe('2026-05-06');
   });
 });
 

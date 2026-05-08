@@ -95,7 +95,9 @@ export async function fetchDoneTasks(): Promise<Task[]> {
   return data.tasks ?? [];
 }
 
-type TaskActionRequest = { action: 'done'; id: string };
+type TaskActionRequest =
+  | { action: 'done'; id: string }
+  | { action: 'due'; id: string; date: string | null };
 type TaskActionResponse = { ok: true; task: Task } | { ok: false; error: string };
 
 export async function postTaskAction(request: TaskActionRequest): Promise<Task> {

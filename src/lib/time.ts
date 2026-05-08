@@ -139,6 +139,17 @@ export function kolkataDateString(d: Date): string {
 }
 
 /**
+ * YYYY-MM-DD `days` away from `now` in Asia/Kolkata wall-clock. Negative
+ * `days` returns a past date. Used by the reschedule sheet to resolve "Today"
+ * / "Tomorrow" / "+1w" chips into concrete dates client-side, so the
+ * optimistic UI can place the task in the right section without waiting for
+ * the server to echo back.
+ */
+export function shiftKolkataDate(now: Date, days: number): string {
+  return kolkataDateString(addMinutes(now, days * 24 * 60));
+}
+
+/**
  * Human label for the day a Date falls on, in IST: "Today", "Tomorrow",
  * "Yesterday", or fallback "May 9". Pure — caller passes `now` in tests.
  */

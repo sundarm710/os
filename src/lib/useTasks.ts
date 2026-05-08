@@ -4,8 +4,9 @@ import {
   fetchOpenTasks,
   postTaskAction,
   type Task,
+  type TaskCategory,
 } from './api';
-import { kolkataDateString } from './time';
+import { kolkataDateString, shiftKolkataDate } from './time';
 
 export function useTasks() {
   const [open, setOpen] = useState<Task[]>([]);
@@ -62,6 +63,36 @@ export function useTasks() {
     [open],
   );
 
+  // Reschedule a task to a new YYYY-MM-DD or null (clear). Same optimistic
+  // pattern as complete(): swap the task in-place with new due + recomputed
+  // category, fire the action, replace with server's authoritative task on
+  // success or revert on failure. Category is approximated client-side; the
+  // server response corrects it (e.g. for week-boundary differences).
+  const reschedule = useCallback(
+    async (id: string, date: string | null) => {
+      const snapshot = open.find((t) => t.id === id);
+      if (!snapshot) return;
+
+      const optimistic: Task = {
+        ...snapshot,
+        due: date,
+        category: computeCategory(date, new Date()),
+      };
+
+      setOpen((prev) => prev.map((t) => (t.id === id ? optimistic : t)));
+
+      try {
+        const updated = await postTaskAction({ action: 'due', id, date });
+        setOpen((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        setError(null);
+      } catch (e) {
+        setOpen((prev) => prev.map((t) => (t.id === id ? snapshot : t)));
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [open],
+  );
+
   useEffect(() => {
     void refresh();
     function onVisibility() {
@@ -71,5 +102,16 @@ export function useTasks() {
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [refresh]);
 
-  return { open, done, loading, error, refresh, complete };
+  return { open, done, loading, error, refresh, complete, reschedule };
+}
+
+function computeCategory(date: string | null, now: Date): TaskCategory {
+  if (!date) return 'NO_DATE';
+  const todayKey = kolkataDateString(now);
+  if (date < todayKey) return 'OVERDUE';
+  if (date === todayKey) return 'TODAY';
+  // THIS_WEEK = +1..+6 days from today (rolling). Beyond is FUTURE.
+  const weekEdgeKey = shiftKolkataDate(now, 6);
+  if (date <= weekEdgeKey) return 'THIS_WEEK';
+  return 'FUTURE';
 }

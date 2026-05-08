@@ -8,9 +8,16 @@ interface Props {
   muted?: boolean;
   hideProject?: boolean;
   onComplete?: (id: string) => void;
+  onReschedule?: (id: string) => void;
 }
 
-export function TaskCard({ task, muted, hideProject, onComplete }: Props) {
+export function TaskCard({
+  task,
+  muted,
+  hideProject,
+  onComplete,
+  onReschedule,
+}: Props) {
   const meta: ReactNode[] = [];
 
   // When the section header carries the project, surface category urgency
@@ -31,7 +38,29 @@ export function TaskCard({ task, muted, hideProject, onComplete }: Props) {
   if (!hideProject && task.project) {
     meta.push(<span key="project">{task.project}</span>);
   }
-  if (task.due) {
+  // The due chip itself is the reschedule affordance — tapping the date opens
+  // the date sheet. Dateless open tasks get a "+ date" pill so the trigger is
+  // still discoverable. Done tasks render plain text (no interaction).
+  if (!muted && onReschedule) {
+    meta.push(
+      <button
+        key="due"
+        type="button"
+        onClick={() => {
+          haptic('tap');
+          onReschedule(task.id);
+        }}
+        className={[
+          'border-b border-dashed transition',
+          task.due
+            ? 'border-slate-700 text-slate-400 hover:border-emerald-400 hover:text-emerald-200'
+            : 'border-slate-700 text-slate-500 hover:border-emerald-400 hover:text-emerald-300',
+        ].join(' ')}
+      >
+        {task.due ? formatDueLabel(task.due) : '+ date'}
+      </button>,
+    );
+  } else if (task.due) {
     meta.push(<span key="due">{formatDueLabel(task.due)}</span>);
   }
   if (task.est) {

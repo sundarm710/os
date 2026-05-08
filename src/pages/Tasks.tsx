@@ -3,6 +3,7 @@ import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { kolkataDateString } from '../lib/time';
 import { useTasks } from '../lib/useTasks';
+import { DateSheet } from '../components/DateSheet';
 import { PageHeader } from '../components/PageHeader';
 import { TaskCard } from '../components/TaskCard';
 
@@ -39,15 +40,20 @@ const URGENCY_RANK: Record<TaskCategory, number> = {
 };
 
 export default function Tasks() {
-  const { open, done, loading, error, complete } = useTasks();
+  const { open, done, loading, error, complete, reschedule } = useTasks();
   const [showRoutines, setShowRoutines] = useState<boolean>(false);
   const [showFuture, setShowFuture] = useState<boolean>(false);
   const [groupByProject, setGroupByProject] = useState<boolean>(false);
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
 
   const visibleOpen = showRoutines ? open : open.filter((t) => !t.is_routine);
   const grouped = groupByCategory(visibleOpen);
   const projectGroups = buildProjectGroups(visibleOpen);
   const doneBuckets = bucketDoneTasks(done);
+  const reschedulingTask =
+    reschedulingId === null
+      ? null
+      : open.find((t) => t.id === reschedulingId) ?? null;
 
   const doneRecent = doneBuckets.today.length + doneBuckets.thisWeek.length;
   const meta = `${visibleOpen.length} open · ${doneRecent} done this week`;
@@ -89,6 +95,7 @@ export default function Tasks() {
               tasks={group.tasks}
               hideProject
               onComplete={complete}
+              onReschedule={setReschedulingId}
             />
           ))
         : SECTION_ORDER.map((cat) => {
@@ -116,6 +123,7 @@ export default function Tasks() {
                 toneClass={SECTION_TONE[cat]}
                 tasks={items}
                 onComplete={complete}
+                onReschedule={setReschedulingId}
               />
             );
           })}
@@ -159,6 +167,17 @@ export default function Tasks() {
           )}
         </div>
       )}
+
+      <DateSheet
+        open={reschedulingTask !== null}
+        taskTitle={reschedulingTask?.text}
+        currentDue={reschedulingTask?.due ?? null}
+        onClose={() => setReschedulingId(null)}
+        onPick={(date) => {
+          if (reschedulingId) void reschedule(reschedulingId, date);
+          setReschedulingId(null);
+        }}
+      />
     </section>
   );
 }
@@ -199,6 +218,7 @@ function Section({
   muted,
   hideProject,
   onComplete,
+  onReschedule,
 }: {
   label: string;
   toneClass: string;
@@ -206,6 +226,7 @@ function Section({
   muted?: boolean;
   hideProject?: boolean;
   onComplete?: (id: string) => void;
+  onReschedule?: (id: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -227,6 +248,7 @@ function Section({
             muted={muted}
             hideProject={hideProject}
             onComplete={onComplete}
+            onReschedule={onReschedule}
           />
         ))}
       </ul>
