@@ -2,15 +2,24 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   fetchDoneTasks,
   fetchOpenTasks,
+  fetchProjects,
   postTaskAction,
   type Task,
   type TaskCategory,
 } from './api';
 import { kolkataDateString, shiftKolkataDate } from './time';
 
+export type AddTaskParams = {
+  text: string;
+  project?: string;
+  due?: string | null;
+  est?: string;
+};
+
 export function useTasks() {
   const [open, setOpen] = useState<Task[]>([]);
   const [done, setDone] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<string[] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +102,44 @@ export function useTasks() {
     [open],
   );
 
+  // Lazy projects fetch — triggered the first time the FAB opens. Cached
+  // session-level; the projects list rarely changes mid-session, and a
+  // refresh on next visit is cheap.
+  const loadProjects = useCallback(async () => {
+    if (projects !== null) return;
+    try {
+      const list = await fetchProjects();
+      setProjects(list);
+    } catch (e) {
+      // Surface as banner so the AddTaskSheet still opens with no chips,
+      // and the user can either type a new project or retry.
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [projects]);
+
+  // Add a new task. Server assigns id + computes category, so we don't
+  // optimistically insert — we wait for the server response and prepend the
+  // canonical task to the open list. Errors propagate so the sheet stays
+  // open on failure.
+  const addTask = useCallback(async (params: AddTaskParams) => {
+    const created = await postTaskAction({
+      action: 'add',
+      text: params.text,
+      ...(params.project !== undefined ? { project: params.project } : {}),
+      ...(params.due !== undefined ? { due: params.due } : {}),
+      ...(params.est !== undefined ? { est: params.est } : {}),
+    });
+    setOpen((prev) => [created, ...prev]);
+    setError(null);
+    if (params.project) {
+      setProjects((prev) =>
+        prev && !prev.includes(params.project!)
+          ? [...prev, params.project!].sort()
+          : prev,
+      );
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
     function onVisibility() {
@@ -102,7 +149,18 @@ export function useTasks() {
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [refresh]);
 
-  return { open, done, loading, error, refresh, complete, reschedule };
+  return {
+    open,
+    done,
+    projects,
+    loading,
+    error,
+    refresh,
+    complete,
+    reschedule,
+    addTask,
+    loadProjects,
+  };
 }
 
 function computeCategory(date: string | null, now: Date): TaskCategory {

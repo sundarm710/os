@@ -97,7 +97,15 @@ export async function fetchDoneTasks(): Promise<Task[]> {
 
 type TaskActionRequest =
   | { action: 'done'; id: string }
-  | { action: 'due'; id: string; date: string | null };
+  | { action: 'due'; id: string; date: string | null }
+  | {
+      action: 'add';
+      text: string;
+      project?: string;
+      due?: string | null;
+      est?: string;
+      after?: string;
+    };
 type TaskActionResponse = { ok: true; task: Task } | { ok: false; error: string };
 
 export async function postTaskAction(request: TaskActionRequest): Promise<Task> {
@@ -105,4 +113,10 @@ export async function postTaskAction(request: TaskActionRequest): Promise<Task> 
   const data = (await res.json()) as TaskActionResponse;
   if (!data.ok) throw new Error(data.error);
   return data.task;
+}
+
+export async function fetchProjects(): Promise<string[]> {
+  const res = await postJson(TASKS_URL, { action: 'projects' });
+  const data = (await res.json()) as { projects?: string[] };
+  return data.projects ?? [];
 }

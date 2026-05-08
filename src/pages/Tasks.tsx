@@ -3,9 +3,13 @@ import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { kolkataDateString } from '../lib/time';
 import { useTasks } from '../lib/useTasks';
+import { AddTaskSheet } from '../components/AddTaskSheet';
 import { DateSheet } from '../components/DateSheet';
 import { PageHeader } from '../components/PageHeader';
+import { ReplanFlow } from '../components/ReplanFlow';
 import { TaskCard } from '../components/TaskCard';
+
+const REPLAN_CATEGORIES: TaskCategory[] = ['OVERDUE', 'TODAY', 'NO_DATE'];
 
 const SECTION_ORDER: TaskCategory[] = [
   'OVERDUE',
@@ -40,11 +44,23 @@ const URGENCY_RANK: Record<TaskCategory, number> = {
 };
 
 export default function Tasks() {
-  const { open, done, loading, error, complete, reschedule } = useTasks();
+  const {
+    open,
+    done,
+    projects,
+    loading,
+    error,
+    complete,
+    reschedule,
+    addTask,
+    loadProjects,
+  } = useTasks();
   const [showRoutines, setShowRoutines] = useState<boolean>(false);
   const [showFuture, setShowFuture] = useState<boolean>(false);
   const [groupByProject, setGroupByProject] = useState<boolean>(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<boolean>(false);
+  const [replanQueue, setReplanQueue] = useState<Task[] | null>(null);
 
   const visibleOpen = showRoutines ? open : open.filter((t) => !t.is_routine);
   const grouped = groupByCategory(visibleOpen);
@@ -55,14 +71,44 @@ export default function Tasks() {
       ? null
       : open.find((t) => t.id === reschedulingId) ?? null;
 
+  const replanCandidates = visibleOpen.filter((t) =>
+    REPLAN_CATEGORIES.includes(t.category ?? 'NO_DATE'),
+  );
+
   const doneRecent = doneBuckets.today.length + doneBuckets.thisWeek.length;
   const meta = `${visibleOpen.length} open · ${doneRecent} done this week`;
+
+  const lastUsedProject =
+    open.find((t) => t.project)?.project ?? projects?.[0] ?? null;
+
+  if (replanQueue) {
+    return (
+      <ReplanFlow
+        tasks={replanQueue}
+        onComplete={(id) => void complete(id)}
+        onReschedule={(id, date) => void reschedule(id, date)}
+        onExit={() => setReplanQueue(null)}
+      />
+    );
+  }
 
   return (
     <section className="flex flex-col gap-6">
       <PageHeader title="Tasks" meta={meta} />
 
       <div className="flex flex-wrap items-center gap-2">
+        {replanCandidates.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              haptic('tap');
+              setReplanQueue(replanCandidates);
+            }}
+            className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition active:scale-95 hover:bg-emerald-500/20"
+          >
+            🎯 Replan ({replanCandidates.length})
+          </button>
+        )}
         <ToggleChip
           label="🔁 Routines"
           active={showRoutines}
@@ -178,6 +224,27 @@ export default function Tasks() {
           setReschedulingId(null);
         }}
       />
+
+      <AddTaskSheet
+        open={adding}
+        projects={projects}
+        defaultProject={lastUsedProject}
+        onClose={() => setAdding(false)}
+        onAdd={addTask}
+      />
+
+      <button
+        type="button"
+        aria-label="Add task"
+        onClick={() => {
+          haptic('tap');
+          void loadProjects();
+          setAdding(true);
+        }}
+        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-3xl font-light leading-none text-emerald-50 shadow-xl shadow-emerald-500/30 transition active:scale-90 hover:bg-emerald-400"
+      >
+        +
+      </button>
     </section>
   );
 }

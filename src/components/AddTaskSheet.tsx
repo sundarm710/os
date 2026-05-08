@@ -1,0 +1,253 @@
+import { useEffect, useState } from 'react';
+import { type AddTaskParams } from '../lib/useTasks';
+import { haptic } from '../lib/haptic';
+import { kolkataDateString, shiftKolkataDate } from '../lib/time';
+
+interface Props {
+  open: boolean;
+  projects: string[] | null;
+  defaultProject?: string | null;
+  onClose: () => void;
+  onAdd: (params: AddTaskParams) => Promise<void>;
+}
+
+export function AddTaskSheet({
+  open,
+  projects,
+  defaultProject,
+  onClose,
+  onAdd,
+}: Props) {
+  const [text, setText] = useState<string>('');
+  const [project, setProject] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState<string>('');
+  const [showNewProject, setShowNewProject] = useState<boolean>(false);
+  const [due, setDue] = useState<string | null>(null);
+  const [est, setEst] = useState<string>('');
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Reset state every time the sheet opens so a stale draft doesn't leak.
+  useEffect(() => {
+    if (open) {
+      setText('');
+      setProject(defaultProject ?? null);
+      setNewProject('');
+      setShowNewProject(false);
+      setDue(null);
+      setEst('');
+      setSubmitting(false);
+    }
+  }, [open, defaultProject]);
+
+  if (!open) return null;
+
+  const finalProject = showNewProject ? newProject.trim() : project;
+  const trimmedText = text.trim();
+  const canSubmit = !submitting && trimmedText.length > 0;
+
+  const now = new Date();
+  const today = kolkataDateString(now);
+  const tomorrow = shiftKolkataDate(now, 1);
+  const oneWeek = shiftKolkataDate(now, 7);
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    haptic('submitStart');
+    try {
+      await onAdd({
+        text: trimmedText,
+        ...(finalProject ? { project: finalProject } : {}),
+        ...(due !== null ? { due } : {}),
+        ...(est.trim() ? { est: est.trim() } : {}),
+      });
+      haptic('successRamp');
+      onClose();
+    } catch {
+      // Error is surfaced in the page banner via useTasks. Keep the sheet
+      // open so the user can retry or edit.
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <div
+        role="presentation"
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+      />
+      <div
+        role="dialog"
+        aria-label="New task"
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-2xl border-t border-slate-800 bg-slate-950 p-5"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.25rem)' }}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-100">New task</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-slate-500 hover:text-slate-200"
+          >
+            ✕
+          </button>
+        </div>
+
+        <input
+          autoFocus
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && canSubmit) void handleSubmit();
+          }}
+          placeholder="What needs doing?"
+          maxLength={280}
+          enterKeyHint="send"
+          autoCapitalize="sentences"
+          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-base text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+        />
+
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Project
+          </span>
+          {showNewProject ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newProject}
+                onChange={(e) => setNewProject(e.target.value)}
+                placeholder="New project name"
+                autoFocus
+                className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewProject(false);
+                  setNewProject('');
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300 transition active:scale-95 hover:border-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(projects ?? []).map((p) => (
+                <SmallChip
+                  key={p}
+                  label={p}
+                  active={project === p}
+                  onClick={() => {
+                    haptic('tap');
+                    setProject(project === p ? null : p);
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  haptic('tap');
+                  setShowNewProject(true);
+                }}
+                className="rounded-full border border-dashed border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-400 transition active:scale-95 hover:border-emerald-500 hover:text-emerald-200"
+              >
+                + New
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Due (optional)
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <SmallChip
+              label="Today"
+              active={due === today}
+              onClick={() => {
+                haptic('tap');
+                setDue(due === today ? null : today);
+              }}
+            />
+            <SmallChip
+              label="Tomorrow"
+              active={due === tomorrow}
+              onClick={() => {
+                haptic('tap');
+                setDue(due === tomorrow ? null : tomorrow);
+              }}
+            />
+            <SmallChip
+              label="+1 week"
+              active={due === oneWeek}
+              onClick={() => {
+                haptic('tap');
+                setDue(due === oneWeek ? null : oneWeek);
+              }}
+            />
+            <input
+              type="date"
+              value={due && due !== today && due !== tomorrow && due !== oneWeek ? due : ''}
+              onChange={(e) => setDue(e.target.value || null)}
+              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-300 focus:border-emerald-400 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Estimate (optional)
+          </span>
+          <input
+            type="text"
+            value={est}
+            onChange={(e) => setEst(e.target.value)}
+            placeholder="30m, 1h, …"
+            maxLength={20}
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          />
+        </div>
+
+        <button
+          type="button"
+          disabled={!canSubmit}
+          onClick={() => void handleSubmit()}
+          className="mt-5 w-full rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-emerald-50 transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+        >
+          {submitting ? 'Adding…' : 'Add task'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+function SmallChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'rounded-full border px-3 py-1.5 text-sm transition active:scale-95',
+        active
+          ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200'
+          : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-500',
+      ].join(' ')}
+    >
+      {label}
+    </button>
+  );
+}
