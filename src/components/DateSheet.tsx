@@ -8,6 +8,7 @@ interface Props {
   currentDue?: string | null;
   onClose: () => void;
   onPick: (date: string | null) => void;
+  onCancel?: () => void;
 }
 
 export function DateSheet({
@@ -16,6 +17,7 @@ export function DateSheet({
   currentDue,
   onClose,
   onPick,
+  onCancel,
 }: Props) {
   const [customDate, setCustomDate] = useState<string>('');
 
@@ -90,6 +92,21 @@ export function DateSheet({
             </button>
           </div>
         </label>
+
+        {onCancel && (
+          <div className="mt-5 border-t border-slate-800 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                haptic('warning');
+                onCancel();
+              }}
+              className="w-full rounded-xl border border-rose-700/60 bg-rose-900/20 px-4 py-2 text-sm font-medium text-rose-200 transition active:scale-95 hover:border-rose-500"
+            >
+              Cancel task
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

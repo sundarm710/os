@@ -72,6 +72,63 @@ export function useTasks() {
     [open],
   );
 
+  // Tap a done task's checkbox to undo. Optimistically pull it back into the
+  // open list with status='open' + recomputed category. On failure, reinsert
+  // the snapshot into done. Backend uses the generic `status` action since
+  // there's no dedicated `reopen` wrapper.
+  const reopen = useCallback(
+    async (id: string) => {
+      const snapshot = done.find((t) => t.id === id);
+      if (!snapshot) return;
+
+      const optimistic: Task = {
+        ...snapshot,
+        status: 'open',
+        completed: undefined,
+        category: computeCategory(snapshot.due, new Date()),
+      };
+
+      setDone((prev) => prev.filter((t) => t.id !== id));
+      setOpen((prev) => [optimistic, ...prev]);
+
+      try {
+        const updated = await postTaskAction({
+          action: 'status',
+          id,
+          status: 'open',
+        });
+        setOpen((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        setError(null);
+      } catch (e) {
+        setOpen((prev) => prev.filter((t) => t.id !== id));
+        setDone((prev) => [snapshot, ...prev]);
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [done],
+  );
+
+  // Cancel removes a task from view entirely — backend marks it `- [-] ❌`,
+  // and neither the open nor done list returns cancelled tasks. Optimistic:
+  // drop from open immediately; restore on failure.
+  const cancel = useCallback(
+    async (id: string) => {
+      const snapshot = open.find((t) => t.id === id);
+      if (!snapshot) return;
+
+      setOpen((prev) => prev.filter((t) => t.id !== id));
+
+      try {
+        await postTaskAction({ action: 'cancel', id });
+        setError(null);
+      } catch (e) {
+        setOpen((prev) => [snapshot, ...prev]);
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [open],
+  );
+
   // Long-press on the checkbox flips a task to in_progress. The task stays in
   // the open list (server's `list` includes both open + in_progress); the
   // checkbox tints amber until tapped to complete or reverted server-side.
@@ -180,6 +237,8 @@ export function useTasks() {
     error,
     refresh,
     complete,
+    reopen,
+    cancel,
     start,
     reschedule,
     addTask,

@@ -54,6 +54,8 @@ export default function Tasks() {
     loading,
     error,
     complete,
+    reopen,
+    cancel,
     start,
     reschedule,
     addTask,
@@ -199,6 +201,7 @@ export default function Tasks() {
               toneClass="text-slate-400"
               tasks={doneBuckets.today}
               muted
+              onReopen={reopen}
             />
           )}
           {doneBuckets.thisWeek.length > 0 && (
@@ -207,6 +210,7 @@ export default function Tasks() {
               toneClass="text-slate-400"
               tasks={doneBuckets.thisWeek}
               muted
+              onReopen={reopen}
             />
           )}
           {doneBuckets.earlier.length > 0 && (
@@ -215,6 +219,7 @@ export default function Tasks() {
               toneClass="text-slate-500"
               tasks={doneBuckets.earlier}
               muted
+              onReopen={reopen}
             />
           )}
         </div>
@@ -227,6 +232,10 @@ export default function Tasks() {
         onClose={() => setReschedulingId(null)}
         onPick={(date) => {
           if (reschedulingId) void reschedule(reschedulingId, date);
+          setReschedulingId(null);
+        }}
+        onCancel={() => {
+          if (reschedulingId) void cancel(reschedulingId);
           setReschedulingId(null);
         }}
       />
@@ -292,6 +301,7 @@ function Section({
   hideProject,
   onComplete,
   onStart,
+  onReopen,
   onReschedule,
 }: {
   label: string;
@@ -301,6 +311,7 @@ function Section({
   hideProject?: boolean;
   onComplete?: (id: string) => void;
   onStart?: (id: string) => void;
+  onReopen?: (id: string) => void;
   onReschedule?: (id: string) => void;
 }) {
   return (
@@ -324,6 +335,7 @@ function Section({
             hideProject={hideProject}
             onComplete={onComplete}
             onStart={onStart}
+            onReopen={onReopen}
             onReschedule={onReschedule}
           />
         ))}

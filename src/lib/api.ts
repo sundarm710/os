@@ -127,6 +127,8 @@ export async function fetchDoneTasks(): Promise<Task[]> {
 type TaskActionRequest =
   | { action: 'done'; id: string }
   | { action: 'start'; id: string }
+  | { action: 'cancel'; id: string }
+  | { action: 'status'; id: string; status: TaskStatus }
   | { action: 'due'; id: string; date: string | null }
   | {
       action: 'add';

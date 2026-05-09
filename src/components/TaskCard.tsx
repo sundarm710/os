@@ -11,6 +11,7 @@ interface Props {
   hideProject?: boolean;
   onComplete?: (id: string) => void;
   onStart?: (id: string) => void;
+  onReopen?: (id: string) => void;
   onReschedule?: (id: string) => void;
 }
 
@@ -20,6 +21,7 @@ export function TaskCard({
   hideProject,
   onComplete,
   onStart,
+  onReopen,
   onReschedule,
 }: Props) {
   const meta: ReactNode[] = [];
@@ -56,6 +58,8 @@ export function TaskCard({
   }
 
   const checkable = !muted && Boolean(onComplete);
+  const reopenable = Boolean(muted) && Boolean(onReopen);
+  const interactive = checkable || reopenable;
   const inProgress = task.status === 'in_progress';
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef<boolean>(false);
@@ -86,6 +90,11 @@ export function TaskCard({
       return;
     }
     clearLongPress();
+    if (reopenable && onReopen) {
+      haptic('tap');
+      onReopen(task.id);
+      return;
+    }
     if (!checkable || !onComplete) return;
     haptic('tap');
     onComplete(task.id);
@@ -103,13 +112,15 @@ export function TaskCard({
           type="button"
           aria-label={
             muted
-              ? 'Completed'
+              ? reopenable
+                ? 'Reopen task'
+                : 'Completed'
               : inProgress
                 ? 'In progress — tap to complete'
                 : 'Mark as done — long press to start'
           }
           aria-pressed={muted}
-          disabled={!checkable}
+          disabled={!interactive}
           onClick={handleClick}
           onPointerDown={handlePointerDown}
           onPointerUp={clearLongPress}
@@ -119,7 +130,9 @@ export function TaskCard({
           className={[
             'mt-0.5 flex h-5 w-5 shrink-0 select-none items-center justify-center rounded border transition active:scale-90',
             muted
-              ? 'border-emerald-700/60 bg-emerald-700/30 text-emerald-200'
+              ? reopenable
+                ? 'border-emerald-700/60 bg-emerald-700/30 text-emerald-200 hover:border-slate-400 hover:bg-slate-700/40'
+                : 'border-emerald-700/60 bg-emerald-700/30 text-emerald-200'
               : inProgress
                 ? 'border-amber-500/70 bg-amber-500/15 text-amber-200'
                 : checkable
