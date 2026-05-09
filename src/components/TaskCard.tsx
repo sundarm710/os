@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { type Task } from '../lib/api';
+import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { formatDayLabel } from '../lib/time';
 
@@ -20,27 +20,13 @@ export function TaskCard({
 }: Props) {
   const meta: ReactNode[] = [];
 
-  // When the section header carries the project, surface category urgency
-  // inline so OVERDUE/TODAY tasks still pop in project-grouped mode.
-  if (
-    hideProject &&
-    (task.category === 'OVERDUE' || task.category === 'TODAY')
-  ) {
-    const tone =
-      task.category === 'OVERDUE' ? 'text-rose-300' : 'text-emerald-300';
-    const label = task.category === 'OVERDUE' ? 'Overdue' : 'Today';
-    meta.push(
-      <span key="cat" className={tone}>
-        {label}
-      </span>,
-    );
-  }
   if (!hideProject && task.project) {
     meta.push(<span key="project">{task.project}</span>);
   }
   // The due chip itself is the reschedule affordance — tapping the date opens
   // the date sheet. Dateless open tasks get a "+ date" pill so the trigger is
-  // still discoverable. Done tasks render plain text (no interaction).
+  // still discoverable. The chip's color encodes urgency (rose=overdue,
+  // emerald=today) so project-grouped mode doesn't need a separate badge.
   if (!muted && onReschedule) {
     meta.push(
       <button
@@ -52,9 +38,7 @@ export function TaskCard({
         }}
         className={[
           'border-b border-dashed transition',
-          task.due
-            ? 'border-slate-700 text-slate-400 hover:border-emerald-400 hover:text-emerald-200'
-            : 'border-slate-700 text-slate-500 hover:border-emerald-400 hover:text-emerald-300',
+          dueChipTone(task.category, Boolean(task.due)),
         ].join(' ')}
       >
         {task.due ? formatDueLabel(task.due) : '+ date'}
@@ -133,4 +117,16 @@ function formatDueLabel(due: string): string {
   // user's wall-clock day, not UTC.
   const date = new Date(`${due}T00:00:00+05:30`);
   return formatDayLabel(date);
+}
+
+function dueChipTone(category: TaskCategory | undefined, hasDue: boolean): string {
+  if (category === 'OVERDUE') {
+    return 'border-rose-700/60 text-rose-300 hover:border-rose-400 hover:text-rose-200';
+  }
+  if (category === 'TODAY') {
+    return 'border-emerald-700/60 text-emerald-300 hover:border-emerald-400 hover:text-emerald-200';
+  }
+  return hasDue
+    ? 'border-slate-700 text-slate-400 hover:border-emerald-400 hover:text-emerald-200'
+    : 'border-slate-700 text-slate-500 hover:border-emerald-400 hover:text-emerald-300';
 }
