@@ -54,6 +54,18 @@ export function nextQuarterHour(now: Date): Date {
 }
 
 /**
+ * Round a Date forward to the nearest :15 boundary, returning the input
+ * unchanged when it's already on one. Differs from `nextQuarterHour`, which
+ * strictly advances — use this when stepping past an event end where landing
+ * exactly on the boundary is the desired chained-event behaviour.
+ */
+export function ceilToQuarterHour(d: Date): Date {
+  const QUARTER_MS = QUARTER_MIN * 60_000;
+  const ceiled = Math.ceil(d.getTime() / QUARTER_MS) * QUARTER_MS;
+  return new Date(ceiled);
+}
+
+/**
  * Round a Date to the nearest :15 boundary (forward or backward, whichever is
  * closer). On exact halfway (7.5 min), rounds forward.
  */

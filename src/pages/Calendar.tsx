@@ -4,6 +4,7 @@ import { haptic } from '../lib/haptic';
 import { readString, writeString } from '../lib/storage';
 import {
   addMinutes,
+  ceilToQuarterHour,
   formatDateTime,
   formatForGCal,
   formatTime,
@@ -184,9 +185,11 @@ export default function Calendar() {
 /**
  * Find the soonest quarter-hour boundary at or after `now` that isn't
  * inside a scheduled event. Walks the timed events in chronological order;
- * if the cursor lands inside an event, jumps past its end (snapped to the
- * next quarter). All-day events are ignored — they don't block specific
- * times.
+ * if the cursor lands inside an event, jumps to its end snapped *up* to a
+ * quarter (events on quarter boundaries chain back-to-back with no gap —
+ * `ceilToQuarterHour`, not `nextQuarterHour`, since the latter would skip a
+ * 15-minute slot when the event end is already aligned). All-day events are
+ * ignored — they don't block specific times.
  */
 function nextFreeStart(events: CalendarEvent[], now: Date): Date {
   const timed = events
@@ -199,7 +202,7 @@ function nextFreeStart(events: CalendarEvent[], now: Date): Date {
   for (const event of timed) {
     if (event.end <= cursor.getTime()) continue;
     if (event.start > cursor.getTime()) return cursor;
-    cursor = nextQuarterHour(new Date(event.end));
+    cursor = ceilToQuarterHour(new Date(event.end));
   }
   return cursor;
 }
