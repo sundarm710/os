@@ -1,6 +1,7 @@
 // Flow-specific webhook clients. Pure dispatch — auth, retries, and queue
 // behaviour live elsewhere (webhookClient.ts, sync.ts, queue.ts).
 
+import { kolkataDateString, shiftKolkataDate } from './time';
 import { postJson } from './webhookClient';
 
 // The PWA composes the full thought_log body (including any "[mood: N]"
@@ -83,10 +84,38 @@ export async function fetchCalendarEvents(
   return data.events;
 }
 
+/**
+ * Bucket a task's due date into a category in Asia/Kolkata wall-clock.
+ *
+ * The PWA owns this because the server's notion of "today" can drift from
+ * the user's IST day (n8n + Python on a UTC VPS produced a TODAY-section
+ * that was empty in the evening — server "today" was UTC's tomorrow). By
+ * recomputing client-side after every fetch, the categories always match
+ * the user's local day even if the server is wrong.
+ */
+export function computeCategory(
+  due: string | null,
+  now: Date = new Date(),
+): TaskCategory {
+  if (!due) return 'NO_DATE';
+  const todayKey = kolkataDateString(now);
+  if (due < todayKey) return 'OVERDUE';
+  if (due === todayKey) return 'TODAY';
+  // THIS_WEEK = +1..+6 days from today (rolling). Beyond is FUTURE.
+  const weekEdgeKey = shiftKolkataDate(now, 6);
+  if (due <= weekEdgeKey) return 'THIS_WEEK';
+  return 'FUTURE';
+}
+
 export async function fetchOpenTasks(): Promise<Task[]> {
   const res = await postJson(TASKS_URL, { action: 'list' });
   const data = (await res.json()) as TasksResponse;
-  return data.tasks ?? [];
+  const now = new Date();
+  // Re-bucket with IST-aware logic — see computeCategory comment.
+  return (data.tasks ?? []).map((t) => ({
+    ...t,
+    category: t.status === 'open' ? computeCategory(t.due, now) : t.category,
+  }));
 }
 
 export async function fetchDoneTasks(): Promise<Task[]> {
@@ -112,7 +141,11 @@ export async function postTaskAction(request: TaskActionRequest): Promise<Task> 
   const res = await postJson(TASKS_URL, request);
   const data = (await res.json()) as TaskActionResponse;
   if (!data.ok) throw new Error(data.error);
-  return data.task;
+  const task = data.task;
+  return {
+    ...task,
+    category: task.status === 'open' ? computeCategory(task.due) : task.category,
+  };
 }
 
 export async function fetchProjects(): Promise<string[]> {

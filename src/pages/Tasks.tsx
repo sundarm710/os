@@ -15,8 +15,8 @@ const SECTION_ORDER: TaskCategory[] = [
   'OVERDUE',
   'TODAY',
   'THIS_WEEK',
-  'NO_DATE',
   'FUTURE',
+  'NO_DATE',
 ];
 
 const SECTION_LABEL: Record<TaskCategory, string> = {
@@ -30,18 +30,21 @@ const SECTION_LABEL: Record<TaskCategory, string> = {
 const SECTION_TONE: Record<TaskCategory, string> = {
   OVERDUE: 'text-rose-300',
   TODAY: 'text-emerald-300',
-  NO_DATE: 'text-slate-300',
+  NO_DATE: 'text-slate-400',
   THIS_WEEK: 'text-slate-300',
-  FUTURE: 'text-slate-400',
+  FUTURE: 'text-slate-300',
 };
 
-const URGENCY_RANK: Record<TaskCategory, number> = {
-  OVERDUE: 0,
-  TODAY: 1,
-  THIS_WEEK: 2,
-  FUTURE: 3,
-  NO_DATE: 4,
-};
+// Date sentinel for sorting: NO_DATE tasks land last regardless of position
+// in their section. Using a high Unicode code point so localeCompare on
+// YYYY-MM-DD strings naturally pushes them after all real dates.
+const NO_DUE_SENTINEL = '￿';
+
+function byDueAscending(a: Task, b: Task): number {
+  const da = a.due ?? NO_DUE_SENTINEL;
+  const db = b.due ?? NO_DUE_SENTINEL;
+  return da.localeCompare(db);
+}
 
 export default function Tasks() {
   const {
@@ -56,7 +59,7 @@ export default function Tasks() {
     loadProjects,
   } = useTasks();
   const [showRoutines, setShowRoutines] = useState<boolean>(false);
-  const [showFuture, setShowFuture] = useState<boolean>(false);
+  const [showNoDate, setShowNoDate] = useState<boolean>(false);
   const [groupByProject, setGroupByProject] = useState<boolean>(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [adding, setAdding] = useState<boolean>(false);
@@ -147,18 +150,18 @@ export default function Tasks() {
         : SECTION_ORDER.map((cat) => {
             const items = grouped[cat];
             if (!items || items.length === 0) return null;
-            if (cat === 'FUTURE' && !showFuture) {
+            if (cat === 'NO_DATE' && !showNoDate) {
               return (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => {
                     haptic('tap');
-                    setShowFuture(true);
+                    setShowNoDate(true);
                   }}
                   className="self-start rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-400 transition active:scale-95 hover:border-slate-700 hover:text-slate-200"
                 >
-                  Show {items.length} later
+                  Show {items.length} undated
                 </button>
               );
             }
@@ -338,6 +341,9 @@ function groupByCategory(tasks: Task[]): Partial<Record<TaskCategory, Task[]>> {
     const cat = t.category ?? 'NO_DATE';
     (out[cat] ??= []).push(t);
   }
+  for (const items of Object.values(out)) {
+    if (items) items.sort(byDueAscending);
+  }
   return out;
 }
 
@@ -356,14 +362,7 @@ function buildProjectGroups(
   }
 
   for (const items of map.values()) {
-    items.sort((a, b) => {
-      const ra = URGENCY_RANK[a.category ?? 'NO_DATE'];
-      const rb = URGENCY_RANK[b.category ?? 'NO_DATE'];
-      if (ra !== rb) return ra - rb;
-      const da = a.due ?? '￿';
-      const db = b.due ?? '￿';
-      return da.localeCompare(db);
-    });
+    items.sort(byDueAscending);
   }
 
   return [...map.entries()]

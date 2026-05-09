@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type CalendarPayload } from '../lib/api';
+import { type CalendarEvent, type CalendarPayload } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { readString, writeString } from '../lib/storage';
 import {
@@ -82,7 +82,9 @@ export default function Calendar() {
       timezone: TIMEZONE,
     }));
     writeString('calendarLastTitle', trimmedTitle);
-    setStart(nextQuarterHour(end));
+    // Land Start exactly on the just-scheduled event's end so back-to-back
+    // blocks chain naturally — no quarter-hour rounding gap.
+    setStart(end);
     setDurationMin(DEFAULT_DURATION_MIN);
   }
 
@@ -132,7 +134,7 @@ export default function Calendar() {
           value={formatTime(start)}
           onStep={stepStart}
           onLeftEdgeTap={() => setStart(previousQuarterHour(new Date()))}
-          onRightEdgeTap={() => setStart(nextQuarterHour(new Date()))}
+          onRightEdgeTap={() => setStart(nextFreeStart(events, new Date()))}
           disabled={isSending}
         />
 
@@ -155,19 +157,19 @@ export default function Calendar() {
 
       <SummaryFooter start={start} end={end} />
 
-      <EventList
-        events={events}
-        pending={{ start, end, title: trimmedTitle }}
-        loading={eventsLoading}
-        error={eventsError}
-      />
-
       <SubmitButton
         label="Schedule"
         onSubmit={() => void handleSubmit()}
         disabled={!canSubmit}
         status={status}
         error={error}
+      />
+
+      <EventList
+        events={events}
+        pending={{ start, end, title: trimmedTitle }}
+        loading={eventsLoading}
+        error={eventsError}
       />
 
       <StatusLine
@@ -177,6 +179,29 @@ export default function Calendar() {
       />
     </section>
   );
+}
+
+/**
+ * Find the soonest quarter-hour boundary at or after `now` that isn't
+ * inside a scheduled event. Walks the timed events in chronological order;
+ * if the cursor lands inside an event, jumps past its end (snapped to the
+ * next quarter). All-day events are ignored — they don't block specific
+ * times.
+ */
+function nextFreeStart(events: CalendarEvent[], now: Date): Date {
+  const timed = events
+    .filter((e) => !e.allDay)
+    .map((e) => ({ start: Date.parse(e.start), end: Date.parse(e.end) }))
+    .filter((e) => !Number.isNaN(e.start) && !Number.isNaN(e.end))
+    .sort((a, b) => a.start - b.start);
+
+  let cursor = nextQuarterHour(now);
+  for (const event of timed) {
+    if (event.end <= cursor.getTime()) continue;
+    if (event.start > cursor.getTime()) return cursor;
+    cursor = nextQuarterHour(new Date(event.end));
+  }
+  return cursor;
 }
 
 function SummaryFooter({ start, end }: { start: Date; end: Date }) {

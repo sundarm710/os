@@ -51,16 +51,11 @@ export function EventList({ events, pending, loading, error }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs uppercase tracking-wide text-slate-400">
-          Schedule
+      {loading && (
+        <span className="self-end text-[10px] uppercase tracking-wide text-slate-500">
+          Refreshing…
         </span>
-        {loading && (
-          <span className="text-[10px] uppercase tracking-wide text-slate-500">
-            Refreshing…
-          </span>
-        )}
-      </div>
+      )}
 
       {error && (
         <p className="rounded-lg border border-rose-700/50 bg-rose-900/20 px-3 py-2 text-xs text-rose-300">

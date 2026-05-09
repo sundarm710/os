@@ -33,6 +33,7 @@ const PROMPTS: { label: string; prefix: string }[] = [
   { label: 'Amrutha', prefix: 'Amrutha: ' },
   { label: 'TIL', prefix: 'TIL: ' },
   { label: "What I'm Upto", prefix: "What I'm Upto: " },
+  { label: 'Quote', prefix: 'Quote: ' },
 ];
 
 const PLACEHOLDERS = [

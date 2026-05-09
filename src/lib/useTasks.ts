@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  computeCategory,
   fetchDoneTasks,
   fetchOpenTasks,
   fetchProjects,
   postTaskAction,
   type Task,
-  type TaskCategory,
 } from './api';
-import { kolkataDateString, shiftKolkataDate } from './time';
+import { kolkataDateString } from './time';
 
 export type AddTaskParams = {
   text: string;
@@ -161,15 +161,4 @@ export function useTasks() {
     addTask,
     loadProjects,
   };
-}
-
-function computeCategory(date: string | null, now: Date): TaskCategory {
-  if (!date) return 'NO_DATE';
-  const todayKey = kolkataDateString(now);
-  if (date < todayKey) return 'OVERDUE';
-  if (date === todayKey) return 'TODAY';
-  // THIS_WEEK = +1..+6 days from today (rolling). Beyond is FUTURE.
-  const weekEdgeKey = shiftKolkataDate(now, 6);
-  if (date <= weekEdgeKey) return 'THIS_WEEK';
-  return 'FUTURE';
 }
