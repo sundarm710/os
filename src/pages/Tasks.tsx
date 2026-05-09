@@ -54,6 +54,7 @@ export default function Tasks() {
     loading,
     error,
     complete,
+    start,
     reschedule,
     addTask,
     loadProjects,
@@ -144,6 +145,7 @@ export default function Tasks() {
               tasks={group.tasks}
               hideProject
               onComplete={complete}
+              onStart={start}
               onReschedule={setReschedulingId}
             />
           ))
@@ -172,6 +174,7 @@ export default function Tasks() {
                 toneClass={SECTION_TONE[cat]}
                 tasks={items}
                 onComplete={complete}
+                onStart={start}
                 onReschedule={setReschedulingId}
               />
             );
@@ -288,6 +291,7 @@ function Section({
   muted,
   hideProject,
   onComplete,
+  onStart,
   onReschedule,
 }: {
   label: string;
@@ -296,6 +300,7 @@ function Section({
   muted?: boolean;
   hideProject?: boolean;
   onComplete?: (id: string) => void;
+  onStart?: (id: string) => void;
   onReschedule?: (id: string) => void;
 }) {
   return (
@@ -318,6 +323,7 @@ function Section({
             muted={muted}
             hideProject={hideProject}
             onComplete={onComplete}
+            onStart={onStart}
             onReschedule={onReschedule}
           />
         ))}

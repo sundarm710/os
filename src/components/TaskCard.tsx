@@ -1,13 +1,16 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { formatDayLabel } from '../lib/time';
+
+const LONG_PRESS_MS = 500;
 
 interface Props {
   task: Task;
   muted?: boolean;
   hideProject?: boolean;
   onComplete?: (id: string) => void;
+  onStart?: (id: string) => void;
   onReschedule?: (id: string) => void;
 }
 
@@ -16,6 +19,7 @@ export function TaskCard({
   muted,
   hideProject,
   onComplete,
+  onStart,
   onReschedule,
 }: Props) {
   const meta: ReactNode[] = [];
@@ -52,6 +56,40 @@ export function TaskCard({
   }
 
   const checkable = !muted && Boolean(onComplete);
+  const inProgress = task.status === 'in_progress';
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef<boolean>(false);
+
+  const clearLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handlePointerDown = () => {
+    if (!checkable || !onStart || inProgress) return;
+    longPressFired.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      longPressTimer.current = null;
+      haptic('submitStart');
+      onStart(task.id);
+    }, LONG_PRESS_MS);
+  };
+
+  const handleClick = () => {
+    if (longPressFired.current) {
+      // Long-press already fired — swallow the trailing click so we don't
+      // also mark it done.
+      longPressFired.current = false;
+      return;
+    }
+    clearLongPress();
+    if (!checkable || !onComplete) return;
+    haptic('tap');
+    onComplete(task.id);
+  };
 
   return (
     <li
@@ -63,24 +101,36 @@ export function TaskCard({
       <div className="flex items-start gap-3">
         <button
           type="button"
-          aria-label={muted ? 'Completed' : 'Mark as done'}
+          aria-label={
+            muted
+              ? 'Completed'
+              : inProgress
+                ? 'In progress — tap to complete'
+                : 'Mark as done — long press to start'
+          }
           aria-pressed={muted}
           disabled={!checkable}
-          onClick={() => {
-            if (!checkable || !onComplete) return;
-            haptic('tap');
-            onComplete(task.id);
-          }}
+          onClick={handleClick}
+          onPointerDown={handlePointerDown}
+          onPointerUp={clearLongPress}
+          onPointerLeave={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onContextMenu={(e) => e.preventDefault()}
           className={[
-            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition active:scale-90',
+            'mt-0.5 flex h-5 w-5 shrink-0 select-none items-center justify-center rounded border transition active:scale-90',
             muted
               ? 'border-emerald-700/60 bg-emerald-700/30 text-emerald-200'
-              : checkable
-                ? 'border-slate-600 bg-slate-950 hover:border-emerald-400 hover:bg-emerald-400/5'
-                : 'border-slate-700 bg-slate-950 opacity-60',
+              : inProgress
+                ? 'border-amber-500/70 bg-amber-500/15 text-amber-200'
+                : checkable
+                  ? 'border-slate-600 bg-slate-950 hover:border-emerald-400 hover:bg-emerald-400/5'
+                  : 'border-slate-700 bg-slate-950 opacity-60',
           ].join(' ')}
         >
           {muted && <span className="text-[12px] leading-none">✓</span>}
+          {!muted && inProgress && (
+            <span className="text-[12px] font-bold leading-none">/</span>
+          )}
         </button>
 
         <div className="min-w-0 flex-1">

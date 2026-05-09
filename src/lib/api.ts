@@ -44,7 +44,7 @@ export type TaskCategory =
   | 'FUTURE'
   | 'NO_DATE';
 
-export type TaskStatus = 'open' | 'done';
+export type TaskStatus = 'open' | 'in_progress' | 'done' | 'cancelled';
 
 export type Task = {
   id: string;
@@ -114,7 +114,7 @@ export async function fetchOpenTasks(): Promise<Task[]> {
   // Re-bucket with IST-aware logic — see computeCategory comment.
   return (data.tasks ?? []).map((t) => ({
     ...t,
-    category: t.status === 'open' ? computeCategory(t.due, now) : t.category,
+    category: t.status === 'done' ? t.category : computeCategory(t.due, now),
   }));
 }
 
@@ -126,6 +126,7 @@ export async function fetchDoneTasks(): Promise<Task[]> {
 
 type TaskActionRequest =
   | { action: 'done'; id: string }
+  | { action: 'start'; id: string }
   | { action: 'due'; id: string; date: string | null }
   | {
       action: 'add';
@@ -144,7 +145,7 @@ export async function postTaskAction(request: TaskActionRequest): Promise<Task> 
   const task = data.task;
   return {
     ...task,
-    category: task.status === 'open' ? computeCategory(task.due) : task.category,
+    category: task.status === 'done' ? task.category : computeCategory(task.due),
   };
 }
 

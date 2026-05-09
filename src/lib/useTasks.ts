@@ -72,6 +72,29 @@ export function useTasks() {
     [open],
   );
 
+  // Long-press on the checkbox flips a task to in_progress. The task stays in
+  // the open list (server's `list` includes both open + in_progress); the
+  // checkbox tints amber until tapped to complete or reverted server-side.
+  const start = useCallback(
+    async (id: string) => {
+      const snapshot = open.find((t) => t.id === id);
+      if (!snapshot || snapshot.status === 'in_progress') return;
+
+      const optimistic: Task = { ...snapshot, status: 'in_progress' };
+      setOpen((prev) => prev.map((t) => (t.id === id ? optimistic : t)));
+
+      try {
+        const updated = await postTaskAction({ action: 'start', id });
+        setOpen((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        setError(null);
+      } catch (e) {
+        setOpen((prev) => prev.map((t) => (t.id === id ? snapshot : t)));
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [open],
+  );
+
   // Reschedule a task to a new YYYY-MM-DD or null (clear). Same optimistic
   // pattern as complete(): swap the task in-place with new due + recomputed
   // category, fire the action, replace with server's authoritative task on
@@ -157,6 +180,7 @@ export function useTasks() {
     error,
     refresh,
     complete,
+    start,
     reschedule,
     addTask,
     loadProjects,
