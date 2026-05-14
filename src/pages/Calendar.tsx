@@ -22,9 +22,9 @@ import { StatusLine } from '../components/StatusLine';
 import { SubmitButton } from '../components/SubmitButton';
 
 const TITLE_ROWS = [
-  ['Amrutha', 'Build', 'Workout'],
-  ['Chess', 'German', 'Admin'],
-  ['Chill', 'Sleep', 'Chores'],
+  ['Amrutha', 'Build', 'Workout', 'Chess'],
+  ['German', 'Admin', 'Chill', 'Sleep'],
+  ['Chores', 'Commute', 'Talk', 'Wedding'],
 ] as const;
 
 const DEFAULT_TITLE = 'Build';
@@ -91,11 +91,28 @@ export default function Calendar() {
 
   return (
     <section className="flex flex-col gap-6">
-      <PageHeader title="Calendar Block" />
+      <PageHeader
+        title="Calendar Block"
+        action={
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            className={[
+              'rounded-full px-3 py-1.5 text-xs font-semibold transition active:scale-95',
+              canSubmit
+                ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                : 'bg-slate-800 text-slate-500',
+            ].join(' ')}
+          >
+            {isSending ? 'Saving…' : 'Schedule'}
+          </button>
+        }
+      />
 
       <div className="flex flex-col gap-2">
         {TITLE_ROWS.map((row, idx) => (
-          <div key={idx} className="grid grid-cols-3 gap-2">
+          <div key={idx} className="grid grid-cols-4 gap-2">
             {row.map((t) => {
               const isActive = trimmedTitle === t;
               return (
