@@ -73,6 +73,14 @@ export type WorkoutFetchType = WorkoutSessionType | 'all';
 
 export type WorkoutSetStatus = 'completed' | 'skipped' | 'failed';
 
+export type MuscleGroup =
+  | 'chest' | 'back' | 'shoulders' | 'biceps' | 'triceps' | 'forearms'
+  | 'quads' | 'hamstrings' | 'glutes' | 'calves' | 'core' | 'mobility' | 'cardio';
+
+export type SessionSplit =
+  | 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full'
+  | 'home' | 'mobility' | 'cardio';
+
 export type WorkoutSet = {
   set_number: number;
   weight_kg: number | null;
@@ -88,6 +96,7 @@ export type WorkoutSet = {
 export type WorkoutExercise = {
   exercise_name: string;
   exercise_category: 'warmup' | 'main' | 'cooldown' | string;
+  muscle_group: MuscleGroup | string | null;
   modality: 'bilateral' | 'unilateral' | 'timed_unilateral' | 'timed' | string;
   sets: WorkoutSet[];
 };
@@ -96,6 +105,7 @@ export type WorkoutSession = {
   id: number;
   date: string; // ISO date string (often UTC midnight); render in Asia/Kolkata
   session_type: WorkoutSessionType;
+  split: SessionSplit | string | null;
   program_phase: number | null;
   program_week: number | null;
   overall_feel: string | null;

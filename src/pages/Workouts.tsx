@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
+  type SessionSplit,
   type WorkoutExercise,
-  type WorkoutFetchType,
+  type WorkoutSessionType,
   type WorkoutSession,
   type WorkoutSet,
 } from '../lib/api';
@@ -9,11 +10,14 @@ import { haptic } from '../lib/haptic';
 import { useWorkouts } from '../lib/useWorkouts';
 import { PageHeader } from '../components/PageHeader';
 
-type Tab = Exclude<WorkoutFetchType, 'all'>;
+const TYPE_OPTIONS: { value: WorkoutSessionType; label: string }[] = [
+  { value: 'strength', label: 'Strength' },
+  { value: 'cardio', label: 'Cardio' },
+];
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'strength', label: 'Strength' },
-  { id: 'cardio', label: 'Cardio' },
+// Display order for the split tabs.
+const SPLIT_ORDER: SessionSplit[] = [
+  'push', 'pull', 'legs', 'upper', 'lower', 'full', 'home', 'mobility',
 ];
 
 const CATEGORY_ORDER: Record<string, number> = {
@@ -28,9 +32,31 @@ const CATEGORY_LABEL: Record<string, string> = {
   cooldown: 'Cooldown',
 };
 
+type SplitTab = 'all' | SessionSplit;
+
 export default function Workouts() {
-  const [tab, setTab] = useState<Tab>('strength');
-  const { sessions, loading, error, refresh } = useWorkouts(tab);
+  const [type, setType] = useState<WorkoutSessionType>('strength');
+  const [splitTab, setSplitTab] = useState<SplitTab>('all');
+  const { sessions, loading, error, refresh } = useWorkouts(type, 50);
+
+  // Reset split filter when switching workout type.
+  function onTypeChange(next: WorkoutSessionType) {
+    setType(next);
+    setSplitTab('all');
+  }
+
+  // Splits that actually appear in the fetched strength sessions, in fixed order.
+  const availableSplits = useMemo<SessionSplit[]>(() => {
+    if (type !== 'strength') return [];
+    const present = new Set<string>();
+    for (const s of sessions) if (s.split) present.add(s.split);
+    return SPLIT_ORDER.filter((s) => present.has(s));
+  }, [sessions, type]);
+
+  const visibleSessions = useMemo(() => {
+    if (type !== 'strength' || splitTab === 'all') return sessions;
+    return sessions.filter((s) => s.split === splitTab);
+  }, [sessions, splitTab, type]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -51,32 +77,44 @@ export default function Workouts() {
         }
       />
 
-      <div role="tablist" aria-label="Workout type" className="grid grid-cols-2 gap-2">
-        {TABS.map((t) => {
-          const isActive = t.id === tab;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => {
-                if (t.id === tab) return;
-                haptic('tap');
-                setTab(t.id);
-              }}
-              className={[
-                'rounded-xl border px-3 py-2 text-sm font-medium transition active:scale-[0.98]',
-                isActive
-                  ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200'
-                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700',
-              ].join(' ')}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
+      <label className="flex items-center gap-3">
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Type</span>
+        <select
+          value={type}
+          onChange={(e) => {
+            haptic('tap');
+            onTypeChange(e.target.value as WorkoutSessionType);
+          }}
+          className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-700 focus:border-emerald-400 focus:outline-none"
+        >
+          {TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </label>
+
+      {type === 'strength' && availableSplits.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="Session split"
+          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1"
+        >
+          <SplitTabButton
+            label="All"
+            active={splitTab === 'all'}
+            onClick={() => { haptic('tap'); setSplitTab('all'); }}
+          />
+          {availableSplits.map((s) => (
+            <SplitTabButton
+              key={s}
+              label={s}
+              split={s}
+              active={splitTab === s}
+              onClick={() => { haptic('tap'); setSplitTab(s); }}
+            />
+          ))}
+        </div>
+      )}
 
       {error && (
         <p className="rounded-xl border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
@@ -84,22 +122,51 @@ export default function Workouts() {
         </p>
       )}
 
-      {!error && loading && sessions.length === 0 && (
+      {!error && loading && visibleSessions.length === 0 && (
         <p className="text-sm text-slate-500">Loading sessions…</p>
       )}
 
-      {!error && !loading && sessions.length === 0 && (
+      {!error && !loading && visibleSessions.length === 0 && (
         <p className="text-sm text-slate-500">
-          No {tab} sessions yet.
+          {type === 'strength' && splitTab !== 'all'
+            ? `No ${splitTab} sessions in the last ${sessions.length} fetched.`
+            : `No ${type} sessions yet.`}
         </p>
       )}
 
       <ul className="flex flex-col gap-3">
-        {sessions.map((s) => (
+        {visibleSessions.map((s) => (
           <SessionCard key={s.id} session={s} />
         ))}
       </ul>
     </section>
+  );
+}
+
+function SplitTabButton({
+  label, split, active, onClick,
+}: {
+  label: string;
+  split?: SessionSplit;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const activeCls = split
+    ? (SPLIT_STYLES[split] ?? 'border-emerald-400 bg-emerald-400/10 text-emerald-200')
+    : 'border-emerald-400 bg-emerald-400/10 text-emerald-200';
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={[
+        'shrink-0 rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-wide transition active:scale-95',
+        active ? activeCls : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700',
+      ].join(' ')}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -109,9 +176,12 @@ function SessionCard({ session }: { session: WorkoutSession }) {
     <li className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-100">
-            {formatSessionDate(session.date)}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-slate-100">
+              {formatSessionDate(session.date)}
+            </h2>
+            {session.split && <SplitBadge split={session.split} />}
+          </div>
           <p className="mt-0.5 text-xs text-slate-400">
             {sessionMeta(session)}
           </p>
@@ -136,7 +206,14 @@ function ExerciseBlock({ exercise }: { exercise: WorkoutExercise }) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-slate-100">{exercise.exercise_name}</p>
+        <p className="text-sm font-medium text-slate-100">
+          {exercise.exercise_name}
+          {exercise.muscle_group && (
+            <span className="ml-1.5 text-[10px] font-normal uppercase tracking-wide text-slate-500">
+              · {exercise.muscle_group}
+            </span>
+          )}
+        </p>
         <p className="text-[10px] uppercase tracking-wide text-slate-500">
           {CATEGORY_LABEL[exercise.exercise_category] ?? exercise.exercise_category} ·{' '}
           {exercise.modality.replace('_', ' ')}
@@ -203,12 +280,35 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+const SPLIT_STYLES: Record<string, string> = {
+  push:     'border-orange-400/60 bg-orange-400/10 text-orange-200',
+  pull:     'border-sky-400/60 bg-sky-400/10 text-sky-200',
+  legs:     'border-violet-400/60 bg-violet-400/10 text-violet-200',
+  upper:    'border-amber-400/60 bg-amber-400/10 text-amber-200',
+  lower:    'border-fuchsia-400/60 bg-fuchsia-400/10 text-fuchsia-200',
+  full:     'border-emerald-400/60 bg-emerald-400/10 text-emerald-200',
+  home:     'border-cyan-400/60 bg-cyan-400/10 text-cyan-200',
+  mobility: 'border-slate-500/60 bg-slate-500/10 text-slate-300',
+  cardio:   'border-rose-400/60 bg-rose-400/10 text-rose-200',
+};
+
+function SplitBadge({ split }: { split: string }) {
+  const cls = SPLIT_STYLES[split] ?? 'border-slate-700 bg-slate-800 text-slate-300';
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+      {split}
+    </span>
+  );
+}
+
+// Group exercises by category (warmup → main → cooldown). Within a category,
+// keep the order they came back from the API — that's the order they were
+// performed in the session (sorted by strength_sets.id on the server).
 function sortedExercises(exercises: WorkoutExercise[]): WorkoutExercise[] {
   return [...exercises].sort((a, b) => {
     const ca = CATEGORY_ORDER[a.exercise_category] ?? 99;
     const cb = CATEGORY_ORDER[b.exercise_category] ?? 99;
-    if (ca !== cb) return ca - cb;
-    return a.exercise_name.localeCompare(b.exercise_name);
+    return ca - cb;
   });
 }
 
