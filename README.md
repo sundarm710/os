@@ -1,157 +1,125 @@
-# Sundar OS
+# os
 
-> A personal operating system for accountability.
-> Not productivity. Not optimization. Accountability — to a life I said I wanted.
+A personal operating system I'm building for myself, focused on accountability — checking whether the day I actually lived matched the life I said I was working toward.
 
-![status: in active use](https://img.shields.io/badge/status-in_active_use-brightgreen)
-![stack: n8n + Postgres + React PWA](https://img.shields.io/badge/stack-n8n_+_Postgres_+_React_PWA-blue)
-![interface: Telegram + PWA](https://img.shields.io/badge/interface-Telegram_%2B_PWA-purple)
-![license: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
+This repo is the PWA frontend. The backend (n8n workflows, Postgres, a markdown vault) runs privately on a small VPS.
 
 ---
 
-## Why this exists
+## What it tracks
 
-Most tools optimize for *more output*. Sundar OS optimizes for the opposite question:
+A few things I care about, all in one place:
 
-**Did the day you lived match the life you said you were building?**
+| Domain | What gets captured |
+|---|---|
+| Strength | Sets, reps, weight, how it felt, the split (push/pull/legs/etc.) |
+| Cardio | Duration, distance, HR zone |
+| Nutrition | Meals, protein, calories |
+| Weight | Daily weigh-in, body comp trend |
+| Money | Net worth log, expenditure, ROI, allocation |
+| Tasks | Open / in-progress / done, with due dates |
+| Journaling | Thought logs, work logs, reading logs |
+| Calendar | Time-blocked days with themed categories |
+| Relationships | Briefs and touch-point reminders for the people who matter |
 
-I was tired of:
-
-- Habit trackers that decay into checkboxes I tick on autopilot.
-- Productivity apps that confuse busyness with direction.
-- Journals that turn into a graveyard of forgotten intentions.
-- Spreadsheets I update for a week and abandon.
-
-So I built a system that watches me, gently, across every dimension I care about — strength, money, energy, mood, work, reading, relationships — and surfaces the gap between intent and behavior. Every day. With receipts.
-
-This repo is the **frontend** to that system: a mobile-first PWA I use to capture, query, and reflect from anywhere. The backend (n8n workflows, Postgres, scripts, prompts) lives privately and runs on my own VPS.
-
----
-
-## What it does
-
-A single, opinionated surface for nine domains:
-
-| Domain | What gets captured | Why |
-|---|---|---|
-| **Strength** | Every set, rep, weight, feel, split (push/pull/legs) | Strength is the only honest progress signal I trust |
-| **Cardio** | Duration, distance, HR zone, perceived effort | Zone-2 minutes are the leading indicator of energy weeks out |
-| **Nutrition** | Meals, protein, calories | Lagging signals only — no calorie obsession, just truth |
-| **Weight & body** | Daily weigh-in, body comp | Trend, not point |
-| **Money** | Net worth log, expenditure, ROI, allocation | The Dashboard view is the only place I look for "am I OK?" |
-| **Tasks** | Open, in-progress, done, blocked | Plain text, file-backed, no SaaS lock-in |
-| **Journaling** | Thought logs with mood, work logs, reading logs | Append-only. The shape of a week is in the timestamps |
-| **Calendar** | Time-blocking with categorized themes | "Where did the week go?" answered before it goes |
-| **Relationships** | Briefs for partner, family touch-points | The thing tools never help with, but matters most |
-
-Each capture is one tap or one Telegram message. The system writes to a real database, a versioned vault, and a daily note — all three, all the time.
+Each capture is one tap from the app or one short message over Telegram.
 
 ---
 
-## The shape of the system
+## How it's wired
 
 ```
-                          +--------------------------+
-                          |   Telegram (primary)     |
-                          |   PWA  (mobile, offline) |
-                          |   Cron / Calendar (auto) |
-                          +------------+-------------+
-                                       |
-                              one intent per message
-                                       |
-                                       v
-                          +--------------------------+
-                          |   SO-Router (n8n)        |
-                          |   classifies via Claude  |
-                          +------------+-------------+
-                                       |
-              +------------+-----------+------------+------------+
-              v            v           v            v            v
-          Strength     Nutrition     Tasks       Journal       Money
-            Log          Log       (add/done)  (mood/log)    Dashboard
-              |            |           |            |            |
-              +------------+-----------+------------+------------+
-                                       |
-                       +---------------+----------------+
-                       v               v                v
-                  Postgres       Obsidian Vault     Daily Note
-                  (analytics)    (PARA, git)        (markdown)
+                         +--------------------------+
+                         |   Telegram (primary)     |
+                         |   PWA  (mobile, offline) |
+                         |   Cron / Calendar (auto) |
+                         +------------+-------------+
+                                      |
+                              one short message
+                                      |
+                                      v
+                         +--------------------------+
+                         |  Router (n8n workflow)   |
+                         |  classifies via Claude   |
+                         +------------+-------------+
+                                      |
+              +-----------+-----------+-----------+-----------+
+              v           v           v           v           v
+           Strength   Nutrition    Tasks       Journal     Money
+            log         log       (add/done)  (mood/log)  dashboard
+              |           |           |           |           |
+              +-----------+-----------+-----------+-----------+
+                                      |
+                       +--------------+---------------+
+                       v              v               v
+                  Postgres       Markdown vault   Daily note
+                  (queries)      (PARA, git)      (timeline)
 ```
 
-Three substrates, on purpose:
+Three places things land, by design:
 
-- **Postgres** for queries — *last leg workout*, *net worth trend*, *protein this week*.
-- **Vault (markdown, git)** for permanence — text I can read in twenty years without a runtime.
-- **Daily note** for narrative — the unified timeline of what actually happened today.
+- **Postgres** for the queryable stuff — *last leg workout*, *net worth trend*, *protein this week*.
+- **Markdown vault** (git-versioned) for permanence — plain text I can still read in twenty years without any runtime.
+- **Daily note** for narrative — a single timeline of what actually happened today, stitched from everything else.
 
 ---
 
 ## This repo: the PWA
 
-A React + Vite + Tailwind PWA that I use as the everyday surface. Installs to the home screen, works offline, syncs when reachable.
+A React + Vite + Tailwind PWA. Installs to the home screen, works offline, syncs when reachable. It's deliberately small — the data lives elsewhere; this is just the window into it.
 
 ### Tabs
 
 - **Today** — daily brief, mood capture, thought log.
 - **Tasks** — open / today / overdue, long-press to start, tap to complete.
-- **Calendar** — time-blocking, color-coded categories, "next free slot" helpers.
-- **Workouts** — strength + cardio history, filterable by split (push/pull/legs/upper/lower/full/home/mobility), with copy-to-log for variant sessions.
+- **Calendar** — time-blocking with categorized themes.
+- **Workouts** — strength and cardio history, filterable by split, with a copy-to-log helper for repeating sessions.
 
-### Design principles
+### A few principles I tried to stick to
 
-1. **One-tap capture, zero-thought review.** If logging a workout takes more than a minute, I won't.
-2. **The PWA is a view, not the source of truth.** Database and vault are. The app can be rebuilt; the data is sacred.
-3. **Offline-first, queue-on-failure.** A flaky train tunnel can't be an excuse to skip.
-4. **No third-party SaaS in the hot path.** Self-hosted, on my VPS, behind my domain.
-5. **Boring tech, boring UI.** The discipline is in showing up, not in the framework.
+- Capture should take one tap. If logging a workout takes a minute, I'll skip it.
+- The app is a view, not the source of truth. The database and vault are. The app can be rebuilt; the data shouldn't ever be at risk.
+- Offline-first. A flaky tunnel shouldn't be an excuse to break the habit.
+- Self-hosted where possible. Less surface area, less vendor risk.
+- Boring tech. The interesting part is showing up, not the framework.
 
 ### Stack
 
 | Layer | Choice |
 |---|---|
 | UI | React 18 + Vite + Tailwind |
-| State | Local component state + idb-keyval for offline queue |
-| Transport | `fetch` to n8n webhooks with shared token auth |
-| Hosting | Static build, nginx on VPS, Cloudflare DNS |
-| PWA | `vite-plugin-pwa` + Workbox precache |
+| State | Local component state + idb-keyval for the offline queue |
+| Transport | `fetch` to n8n webhooks with a shared token |
+| Hosting | Static build, nginx on a VPS, Cloudflare DNS |
+| PWA | `vite-plugin-pwa` + Workbox |
 | Tests | Vitest + fake-indexeddb |
 
 ---
 
-## Running it
+## Running it locally
 
 ```bash
-git clone git@github.com:sundarm710/os.git sundar-app
-cd sundar-app
+git clone git@github.com:sundarm710/os.git
+cd os
 npm install
 cp .env.example .env.local   # fill in webhook URLs + auth token
 npm run dev
 ```
 
-Deploy on the VPS is `git pull && npm run build` — nginx serves `dist/` directly.
+Deploy on the VPS is just `git pull && npm run build` — nginx serves `dist/` directly.
 
-The backend (n8n workflows, Postgres schema, prompts) is intentionally not in this repo. The webhook contracts the PWA depends on are documented in `docs/`.
-
----
-
-## What I'd tell my past self
-
-- The point isn't to track everything. It's to track the *few* things you said matter, *consistently enough* that they can't be ignored.
-- Build the capture friction down to one tap before you build any reporting. You'll never report on data you didn't capture.
-- The most valuable view is the one that answers *did you actually live this week the way you said you would?*. Build that one first.
-- Self-hosting is a feature, not a chore. Your data outlives any vendor's roadmap.
+The backend isn't in this repo. The webhook contracts the PWA depends on are documented under `docs/`.
 
 ---
 
 ## Status
 
-In daily use since early 2026. Active development — what you see is what I rely on.
+In daily use since early 2026. Still very much a moving target — I add or rework whatever I'm currently using and notice I want.
 
-This is a personal system shared openly. It is **not** a product, **not** a framework, **not** a template to adopt as-is. The architecture is reusable; the choices are mine. Take what's useful, fork what isn't.
+This is a personal system shared openly. It's not a product or a template to adopt as-is, but if any of the architecture or ideas are useful for your own version, please take them.
 
 ---
 
 ## License
 
-MIT. Use it, fork it, learn from it. No warranty, no support, no resale as SaaS without attribution.
+MIT.
