@@ -9,6 +9,7 @@ const TABS: { id: Page; label: string; icon: string }[] = [
   { id: 'tasks', label: 'Tasks', icon: '📋' },
   { id: 'journal', label: 'Journal', icon: '📓' },
   { id: 'calendar', label: 'Calendar', icon: '📅' },
+  { id: 'workouts', label: 'Workouts', icon: '🏋️' },
 ];
 
 export function TabBar({ active, onChange }: Props) {

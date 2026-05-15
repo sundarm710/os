@@ -4,6 +4,7 @@ import { DEFAULT_PAGE, type Page } from './routes';
 import Tasks from './pages/Tasks';
 import Journal from './pages/Journal';
 import Calendar from './pages/Calendar';
+import Workouts from './pages/Workouts';
 import { TabBar } from './components/TabBar';
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
         {page === 'tasks' && <Tasks />}
         {page === 'journal' && <Journal />}
         {page === 'calendar' && <Calendar />}
+        {page === 'workouts' && <Workouts />}
       </main>
       <TabBar active={page} onChange={setPage} />
     </>

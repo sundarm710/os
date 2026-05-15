@@ -66,6 +66,52 @@ const JOURNAL_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_URL;
 const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
 const CALENDAR_FETCH_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_FETCH_URL;
 const TASKS_URL = import.meta.env.VITE_WEBHOOK_TASKS_URL;
+const WORKOUTS_FETCH_URL = import.meta.env.VITE_WEBHOOK_WORKOUTS_FETCH_URL;
+
+export type WorkoutSessionType = 'strength' | 'cardio';
+export type WorkoutFetchType = WorkoutSessionType | 'all';
+
+export type WorkoutSetStatus = 'completed' | 'skipped' | 'failed';
+
+export type WorkoutSet = {
+  set_number: number;
+  weight_kg: number | null;
+  left_weight_kg: number | null;
+  right_weight_kg: number | null;
+  reps: number | null;
+  duration_seconds: number | null;
+  status: WorkoutSetStatus | string;
+  feel_notes: string | null;
+  cue_notes: string | null;
+};
+
+export type WorkoutExercise = {
+  exercise_name: string;
+  exercise_category: 'warmup' | 'main' | 'cooldown' | string;
+  modality: 'bilateral' | 'unilateral' | 'timed_unilateral' | 'timed' | string;
+  sets: WorkoutSet[];
+};
+
+export type WorkoutSession = {
+  id: number;
+  date: string; // ISO date string (often UTC midnight); render in Asia/Kolkata
+  session_type: WorkoutSessionType;
+  program_phase: number | null;
+  program_week: number | null;
+  overall_feel: string | null;
+  exercises: WorkoutExercise[];
+  copy_text: string;
+};
+
+type WorkoutsResponse =
+  | { ok: true; sessions: WorkoutSession[] }
+  | { ok: false; reason: string };
+
+export type WorkoutsFetchOptions = {
+  type?: WorkoutFetchType;
+  limit?: number;
+  before_date?: string;
+};
 
 export async function postJournal(payload: JournalPayload): Promise<void> {
   await postJson(JOURNAL_URL, payload);
@@ -149,6 +195,19 @@ export async function postTaskAction(request: TaskActionRequest): Promise<Task> 
     ...task,
     category: task.status === 'done' ? task.category : computeCategory(task.due),
   };
+}
+
+export async function fetchWorkouts(
+  options: WorkoutsFetchOptions = {},
+): Promise<WorkoutSession[]> {
+  const body: Record<string, unknown> = {};
+  if (options.type) body.type = options.type;
+  if (options.limit != null) body.limit = options.limit;
+  if (options.before_date) body.before_date = options.before_date;
+  const res = await postJson(WORKOUTS_FETCH_URL, body);
+  const data = (await res.json()) as WorkoutsResponse;
+  if (!data.ok) throw new Error(data.reason || 'workouts fetch failed');
+  return data.sessions;
 }
 
 export async function fetchProjects(): Promise<string[]> {
