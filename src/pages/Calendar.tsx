@@ -22,9 +22,9 @@ import { StatusLine } from '../components/StatusLine';
 import { SubmitButton } from '../components/SubmitButton';
 
 const TITLE_ROWS = [
-  ['Amrutha', 'Build', 'Workout', 'Chess'],
-  ['German', 'Admin', 'Chill', 'Sleep'],
-  ['Chores', 'Commute', 'Talk', 'Wedding'],
+  ['Amrutha', 'Build', 'Workout', 'Chess', 'Breakfast'],
+  ['German', 'Admin', 'Chill', 'Sleep', 'Lunch'],
+  ['Chores', 'Commute', 'Talk', 'Wedding', 'Dinner'],
 ] as const;
 
 const DEFAULT_TITLE = 'Build';
@@ -112,7 +112,7 @@ export default function Calendar() {
 
       <div className="flex flex-col gap-2">
         {TITLE_ROWS.map((row, idx) => (
-          <div key={idx} className="grid grid-cols-4 gap-2">
+          <div key={idx} className="grid grid-cols-5 gap-2">
             {row.map((t) => {
               const isActive = trimmedTitle === t;
               return (

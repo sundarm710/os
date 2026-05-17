@@ -34,9 +34,10 @@ const PROMPTS: { label: string; prefix: string }[] = [
   { label: 'TIL', prefix: 'TIL: ' },
   { label: "What I'm Upto", prefix: "What I'm Upto: " },
   { label: 'Quote', prefix: 'Quote: ' },
+  { label: 'Bucket list', prefix: 'Bucket list: ' },
 ];
 
-type LogCategory = 'all' | 'highlights' | 'lowlights' | 'feeling' | 'amrutha';
+type LogCategory = 'all' | 'highlights' | 'lowlights' | 'feeling' | 'amrutha' | 'bucket';
 
 const CATEGORIES: { id: LogCategory; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -44,6 +45,7 @@ const CATEGORIES: { id: LogCategory; label: string }[] = [
   { id: 'lowlights', label: 'Lowlights' },
   { id: 'feeling', label: 'Feeling' },
   { id: 'amrutha', label: 'Amrutha' },
+  { id: 'bucket', label: 'Bucket' },
 ];
 
 // Single-select tab filter; "all" returns true.
@@ -55,6 +57,7 @@ function matchesCategory(log: JournalLog, cat: LogCategory): boolean {
   const t = log.text ?? '';
   if (cat === 'amrutha') return /amrutha/i.test(t);
   if (cat === 'feeling') return /(^|\s)feeling[:\s]/i.test(t);
+  if (cat === 'bucket') return /bucket\s*list/i.test(t);
   return true;
 }
 
