@@ -36,6 +36,28 @@ const PROMPTS: { label: string; prefix: string }[] = [
   { label: 'Quote', prefix: 'Quote: ' },
 ];
 
+type LogCategory = 'all' | 'highlights' | 'lowlights' | 'feeling' | 'amrutha';
+
+const CATEGORIES: { id: LogCategory; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'highlights', label: 'Highlights' },
+  { id: 'lowlights', label: 'Lowlights' },
+  { id: 'feeling', label: 'Feeling' },
+  { id: 'amrutha', label: 'Amrutha' },
+];
+
+// Single-select tab filter; "all" returns true.
+// Highlights/Lowlights are mood-based; Feeling/Amrutha are keyword-based.
+function matchesCategory(log: JournalLog, cat: LogCategory): boolean {
+  if (cat === 'all') return true;
+  if (cat === 'highlights') return log.mood != null && log.mood >= 4;
+  if (cat === 'lowlights') return log.mood != null && log.mood <= 2;
+  const t = log.text ?? '';
+  if (cat === 'amrutha') return /amrutha/i.test(t);
+  if (cat === 'feeling') return /(^|\s)feeling[:\s]/i.test(t);
+  return true;
+}
+
 const PLACEHOLDERS = [
   "What's bouncing around in your head?",
   'Drop one line.',
@@ -75,6 +97,8 @@ export default function Journal() {
 
   // When set, submit() upserts that journal_logs row instead of inserting new.
   const [editing, setEditing] = useState<JournalLog | null>(null);
+
+  const [category, setCategory] = useState<LogCategory>('all');
 
   const loadLogs = useCallback(async () => {
     setLogsState('loading');
@@ -307,6 +331,17 @@ export default function Journal() {
         <div className="flex justify-end text-xs text-slate-500">
           {text.length}/2000
         </div>
+
+        <SubmitButton
+          label={editing ? 'Update' : 'Submit'}
+          onSubmit={() => void handleSubmit()}
+          disabled={!canSubmit}
+          status={status}
+          error={error}
+        />
+
+        <StatusLine status={status} sentLabel="Logged ✓" />
+
         <div className="flex flex-wrap gap-2">
           {PROMPTS.map(({ label, prefix }) => {
             const isActive = text === prefix;
@@ -330,16 +365,6 @@ export default function Journal() {
         </div>
       </div>
 
-      <SubmitButton
-        label={editing ? 'Update' : 'Submit'}
-        onSubmit={() => void handleSubmit()}
-        disabled={!canSubmit}
-        status={status}
-        error={error}
-      />
-
-      <StatusLine status={status} sentLabel="Logged ✓" />
-
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-slate-500">
@@ -354,6 +379,40 @@ export default function Journal() {
             {logsState === 'loading' ? 'Loading…' : 'Refresh'}
           </button>
         </div>
+        <div
+          role="tablist"
+          aria-label="Log category"
+          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1"
+        >
+          {CATEGORIES.map((c) => {
+            const count =
+              c.id === 'all'
+                ? logs.length
+                : logs.filter((l) => matchesCategory(l, c.id)).length;
+            const active = category === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  haptic('tap');
+                  setCategory(c.id);
+                }}
+                className={[
+                  'shrink-0 rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-wide transition active:scale-95',
+                  active
+                    ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200'
+                    : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700',
+                ].join(' ')}
+              >
+                {c.label}
+                <span className="ml-1.5 text-[10px] text-slate-500">{count}</span>
+              </button>
+            );
+          })}
+        </div>
         {logsState === 'error' && (
           <div className="text-xs text-rose-400">{logsError}</div>
         )}
@@ -361,7 +420,7 @@ export default function Journal() {
           <div className="text-xs text-slate-500">No logs yet.</div>
         )}
         <ul className="flex flex-col gap-2">
-          {logs.map((log) => {
+          {logs.filter((log) => matchesCategory(log, category)).map((log) => {
             const isActive = editing?.client_id === log.client_id;
             return (
               <li
