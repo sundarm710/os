@@ -63,6 +63,7 @@ export type Task = {
 type TasksResponse = { tasks: Task[] };
 
 const JOURNAL_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_URL;
+const JOURNAL_FETCH_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_FETCH_URL;
 const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
 const CALENDAR_FETCH_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_FETCH_URL;
 const TASKS_URL = import.meta.env.VITE_WEBHOOK_TASKS_URL;
@@ -125,6 +126,33 @@ export type WorkoutsFetchOptions = {
 
 export async function postJournal(payload: JournalPayload): Promise<void> {
   await postJson(JOURNAL_URL, payload);
+}
+
+export type JournalLog = {
+  client_id: string;
+  type: string;
+  entry_date: string; // ISO date (often UTC midnight)
+  entry_time: string; // HH:MM:SS, IST wall-clock
+  client_timestamp: string; // full RFC3339
+  mood: number | null;
+  text: string;
+  source: string;
+};
+
+type JournalFetchResponse =
+  | { ok: true; logs: JournalLog[] }
+  | { ok: false; reason: string };
+
+export async function fetchJournalLogs(
+  options: { limit?: number; before_date?: string } = {},
+): Promise<JournalLog[]> {
+  const body: Record<string, unknown> = {};
+  if (options.limit != null) body.limit = options.limit;
+  if (options.before_date) body.before_date = options.before_date;
+  const res = await postJson(JOURNAL_FETCH_URL, body);
+  const data = (await res.json()) as JournalFetchResponse;
+  if (!data.ok) throw new Error(data.reason || 'journal fetch failed');
+  return data.logs;
 }
 
 export async function postCalendar(payload: CalendarPayload): Promise<void> {

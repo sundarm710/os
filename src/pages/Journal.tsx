@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { type JournalPayload } from '../lib/api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchJournalLogs, type JournalLog, type JournalPayload } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { readString, writeString } from '../lib/storage';
 import { formatRelative } from '../lib/time';
@@ -65,13 +65,31 @@ export default function Journal() {
   const [lastLoggedAt, setLastLoggedAt] = useState<string | null>(null);
   const [_tick, setTick] = useState(0);
   const [placeholder, setPlaceholder] = useState<string>(() => pickPlaceholder());
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { status, error, submit } = useSubmission<JournalPayload>('journal');
 
+  const [logs, setLogs] = useState<JournalLog[]>([]);
+  const [logsState, setLogsState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [logsError, setLogsError] = useState<string | null>(null);
+
+  const loadLogs = useCallback(async () => {
+    setLogsState('loading');
+    setLogsError(null);
+    try {
+      const rows = await fetchJournalLogs({ limit: 50 });
+      setLogs(rows);
+      setLogsState('idle');
+    } catch (e) {
+      setLogsError(e instanceof Error ? e.message : 'failed to load');
+      setLogsState('error');
+    }
+  }, []);
+
   useEffect(() => {
     setLastLoggedAt(readString('journalLastLoggedAt'));
-  }, []);
+    void loadLogs();
+  }, [loadLogs]);
 
   // Re-render once a minute so the "Last logged" relative timestamp stays
   // current without polling on every render.
@@ -113,6 +131,30 @@ export default function Journal() {
     setText('');
     setRating(null);
     setPlaceholder(pickPlaceholder());
+    void loadLogs();
+  }
+
+  function moodEmoji(m: number | null): string {
+    if (m == null) return '';
+    if (m <= 1) return '😞';
+    if (m === 2) return '😕';
+    if (m === 3) return '😐';
+    if (m === 4) return '🙂';
+    return '😄';
+  }
+
+  function formatLogTimestamp(log: JournalLog): string {
+    // entry_date is UTC midnight from Postgres; entry_time is IST wall-clock.
+    // Render as "May 17 · 16:36" using those raw IST values.
+    try {
+      const d = new Date(log.entry_date);
+      const month = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+      const day = d.getUTCDate();
+      const time = (log.entry_time || '').slice(0, 5);
+      return `${month} ${day} · ${time}`;
+    } catch {
+      return log.entry_time?.slice(0, 5) ?? '';
+    }
   }
 
   return (
@@ -154,21 +196,28 @@ export default function Journal() {
         <span className="text-xs uppercase tracking-wide text-slate-500">
           Bullet Journal
         </span>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && canSubmit) void handleSubmit();
+            // Cmd/Ctrl+Enter submits; bare Enter inserts a newline.
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && canSubmit) {
+              e.preventDefault();
+              void handleSubmit();
+            }
           }}
           placeholder={placeholder}
-          maxLength={280}
-          enterKeyHint="send"
+          maxLength={2000}
+          rows={4}
+          enterKeyHint="enter"
           autoComplete="off"
           autoCapitalize="sentences"
-          className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-base text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 disabled:opacity-60"
+          className="resize-y rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-base text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 disabled:opacity-60"
         />
+        <div className="flex justify-end text-xs text-slate-500">
+          {text.length}/2000
+        </div>
         <div className="flex flex-wrap gap-2">
           {PROMPTS.map(({ label, prefix }) => {
             const isActive = text === prefix;
@@ -201,6 +250,46 @@ export default function Journal() {
       />
 
       <StatusLine status={status} sentLabel="Logged ✓" />
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wide text-slate-500">
+            Recent logs
+          </span>
+          <button
+            type="button"
+            onClick={() => void loadLogs()}
+            disabled={logsState === 'loading'}
+            className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-50"
+          >
+            {logsState === 'loading' ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
+        {logsState === 'error' && (
+          <div className="text-xs text-rose-400">{logsError}</div>
+        )}
+        {logsState !== 'error' && logs.length === 0 && logsState !== 'loading' && (
+          <div className="text-xs text-slate-500">No logs yet.</div>
+        )}
+        <ul className="flex flex-col gap-2">
+          {logs.map((log) => (
+            <li
+              key={log.client_id}
+              className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3"
+            >
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>{formatLogTimestamp(log)}</span>
+                {log.mood != null && (
+                  <span aria-label={`mood ${log.mood}`}>{moodEmoji(log.mood)}</span>
+                )}
+              </div>
+              <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-200">
+                {log.text}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
