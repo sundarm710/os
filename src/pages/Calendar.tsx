@@ -22,9 +22,10 @@ import { StatusLine } from '../components/StatusLine';
 import { SubmitButton } from '../components/SubmitButton';
 
 const TITLE_ROWS = [
-  ['Amrutha', 'Build', 'Workout', 'Chess', 'Breakfast'],
-  ['German', 'Admin', 'Chill', 'Sleep', 'Lunch'],
-  ['Chores', 'Commute', 'Talk', 'Wedding', 'Dinner'],
+  ['Amrutha', 'Build', 'Workout', 'Chess'],
+  ['German', 'Admin', 'Chill', 'Sleep'],
+  ['Chores', 'Commute', 'Talk', 'Wedding'],
+  ['Breakfast', 'Lunch', 'Dinner', 'Reading'],
 ] as const;
 
 const DEFAULT_TITLE = 'Build';
@@ -112,7 +113,7 @@ export default function Calendar() {
 
       <div className="flex flex-col gap-2">
         {TITLE_ROWS.map((row, idx) => (
-          <div key={idx} className="grid grid-cols-5 gap-2">
+          <div key={idx} className="grid grid-cols-4 gap-2">
             {row.map((t) => {
               const isActive = trimmedTitle === t;
               return (
@@ -123,7 +124,7 @@ export default function Calendar() {
                   onClick={() => pickTitle(t)}
                   disabled={isSending}
                   className={[
-                    'rounded-full border px-3 py-2 text-sm font-medium transition active:scale-95',
+                    'rounded-full border px-3 py-2 text-center text-sm font-medium transition active:scale-95',
                     isActive
                       ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200'
                       : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700',
