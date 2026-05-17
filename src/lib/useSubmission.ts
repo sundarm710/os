@@ -10,7 +10,14 @@ const RESET_DELAY_MS = 1500;
 export type UseSubmissionResult<TPayload extends { client_id: string }> = {
   status: SubmissionStatus;
   error: string | null;
-  submit: (buildPayload: () => Omit<TPayload, 'client_id'>) => Promise<void>;
+  // buildPayload may optionally include a client_id (edit flow); when omitted
+  // a fresh UUID is generated. Reusing an existing client_id turns the POST
+  // into an UPSERT on the server.
+  submit: (
+    buildPayload: () =>
+      | Omit<TPayload, 'client_id'>
+      | (Omit<TPayload, 'client_id'> & { client_id: string }),
+  ) => Promise<void>;
   reset: () => void;
 };
 
@@ -45,7 +52,8 @@ export function useSubmission<TPayload extends { client_id: string }>(
       setError(null);
       haptic('submitStart');
 
-      const payload = { ...buildPayload(), client_id: newClientId() } as TPayload;
+      const built = buildPayload() as Partial<TPayload>;
+      const payload = { client_id: newClientId(), ...built } as TPayload;
 
       try {
         await enqueue(type, payload);
