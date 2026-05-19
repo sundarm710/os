@@ -11,7 +11,7 @@ import {
   addMinutes,
   ceilToQuarterHour,
   formatDateTime,
-  formatDayLabelLong,
+  formatDayLabel,
   formatForGCal,
   formatTime,
   formatTime24,
@@ -237,7 +237,7 @@ export default function Calendar() {
       <div className="grid grid-cols-3 gap-2">
         <DialRow
           label="Date"
-          value={formatDayLabelLong(start)}
+          value={formatDayLabel(start)}
           onStep={stepDate}
           disabled={isSending}
         />

@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
-import { formatDayLabel } from '../lib/time';
+import { formatDayLabelLong } from '../lib/time';
 import { useLongPress } from '../lib/useLongPress';
 
 interface Props {
@@ -48,11 +48,11 @@ export function TaskCard({
           dueChipTone(task.category, Boolean(task.due)),
         ].join(' ')}
       >
-        {task.due ? formatDayLabel(parseISTDate(task.due)) : '+ date'}
+        {task.due ? formatDayLabelLong(parseISTDate(task.due)) : '+ date'}
       </button>,
     );
   } else if (task.due) {
-    meta.push(<span key="due">{formatDayLabel(parseISTDate(task.due))}</span>);
+    meta.push(<span key="due">{formatDayLabelLong(parseISTDate(task.due))}</span>);
   }
   if (task.est) {
     meta.push(<span key="est">{task.est}</span>);
@@ -64,7 +64,7 @@ export function TaskCard({
   // tasks, so we don't render a "+ schedule" pill when scheduled_at is null.
   if (task.scheduled_at) {
     const [schedDate, schedTime] = task.scheduled_at.split('T');
-    const label = schedTime ? `📅 ${schedTime}` : `📅 ${formatDayLabel(parseISTDate(schedDate))}`;
+    const label = schedTime ? `📅 ${schedTime}` : `📅 ${formatDayLabelLong(parseISTDate(schedDate))}`;
     if (!muted && onSchedule) {
       meta.push(
         <button
