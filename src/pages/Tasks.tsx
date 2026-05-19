@@ -62,7 +62,6 @@ export default function Tasks({ onNavigate }: TasksProps) {
     complete,
     reopen,
     cancel,
-    start,
     reschedule,
     addTask,
     loadProjects,
@@ -94,11 +93,22 @@ export default function Tasks({ onNavigate }: TasksProps) {
     open.find((t) => t.project)?.project ?? projects?.[0] ?? null;
 
   function handleSchedule(task: Task) {
+    // If the task is already scheduled, seed the dial with its current time
+    // so re-scheduling is a small tweak rather than a fresh pick. Falls back
+    // to task.due → today for unscheduled, and lets Calendar default the time.
+    let date = task.due ?? kolkataDateString(new Date());
+    let startTime: string | undefined;
+    if (task.scheduled_at) {
+      const [d, t] = task.scheduled_at.split('T');
+      date = d;
+      if (t) startTime = t;
+    }
     writeCalendarPrefill({
       taskId: task.id,
       title: task.text,
-      date: task.due ?? kolkataDateString(new Date()),
+      date,
       durationMin: parseEstMinutes(task.est) ?? DEFAULT_SCHEDULE_DURATION_MIN,
+      startTime,
     });
     onNavigate('calendar');
   }
@@ -163,7 +173,6 @@ export default function Tasks({ onNavigate }: TasksProps) {
               tasks={group.tasks}
               hideProject
               onComplete={complete}
-              onStart={start}
               onReschedule={setReschedulingId}
               onSchedule={handleSchedule}
             />
@@ -193,7 +202,6 @@ export default function Tasks({ onNavigate }: TasksProps) {
                 toneClass={SECTION_TONE[cat]}
                 tasks={items}
                 onComplete={complete}
-                onStart={start}
                 onReschedule={setReschedulingId}
                 onSchedule={handleSchedule}
               />
@@ -318,7 +326,6 @@ function Section({
   muted,
   hideProject,
   onComplete,
-  onStart,
   onReopen,
   onReschedule,
   onSchedule,
@@ -329,7 +336,6 @@ function Section({
   muted?: boolean;
   hideProject?: boolean;
   onComplete?: (id: string) => void;
-  onStart?: (id: string) => void;
   onReopen?: (id: string) => void;
   onReschedule?: (id: string) => void;
   onSchedule?: (task: Task) => void;
@@ -354,7 +360,6 @@ function Section({
             muted={muted}
             hideProject={hideProject}
             onComplete={onComplete}
-            onStart={onStart}
             onReopen={onReopen}
             onReschedule={onReschedule}
             onSchedule={onSchedule}

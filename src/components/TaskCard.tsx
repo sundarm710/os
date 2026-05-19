@@ -1,19 +1,17 @@
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode } from 'react';
 import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { formatDayLabel } from '../lib/time';
-
-const LONG_PRESS_MS = 500;
+import { useLongPress } from '../lib/useLongPress';
 
 interface Props {
   task: Task;
   muted?: boolean;
   hideProject?: boolean;
   onComplete?: (id: string) => void;
-  onStart?: (id: string) => void;
   onReopen?: (id: string) => void;
   onReschedule?: (id: string) => void;
-  /** Open the Calendar tab prefilled with this task. */
+  /** Long-press the card body, or tap the scheduled-time badge, to fire. */
   onSchedule?: (task: Task) => void;
 }
 
@@ -22,7 +20,6 @@ export function TaskCard({
   muted,
   hideProject,
   onComplete,
-  onStart,
   onReopen,
   onReschedule,
   onSchedule,
@@ -41,6 +38,7 @@ export function TaskCard({
       <button
         key="due"
         type="button"
+        onPointerDown={stopPointerPropagation}
         onClick={() => {
           haptic('tap');
           onReschedule(task.id);
@@ -50,28 +48,29 @@ export function TaskCard({
           dueChipTone(task.category, Boolean(task.due)),
         ].join(' ')}
       >
-        {task.due ? formatDueLabel(task.due) : '+ date'}
+        {task.due ? formatDayLabel(parseISTDate(task.due)) : '+ date'}
       </button>,
     );
   } else if (task.due) {
-    meta.push(<span key="due">{formatDueLabel(task.due)}</span>);
+    meta.push(<span key="due">{formatDayLabel(parseISTDate(task.due))}</span>);
   }
   if (task.est) {
     meta.push(<span key="est">{task.est}</span>);
   }
 
-  // Scheduled badge: present iff pm_headless extracted an ⏳ field. When time
-  // is present we show it; otherwise just the date. Tapping re-opens the
-  // Calendar prefilled — re-scheduling overwrites the ⏳ stamp (a stale GCal
-  // event from the previous schedule is the known gap noted in the plan).
+  // Scheduled badge: present iff pm_headless extracted an ⏳ field. Tap to
+  // re-open Calendar prefilled with the existing time (re-schedule). The
+  // long-press path on the card body is the entry point for unscheduled
+  // tasks, so we don't render a "+ schedule" pill when scheduled_at is null.
   if (task.scheduled_at) {
     const [schedDate, schedTime] = task.scheduled_at.split('T');
-    const label = schedTime ? `📅 ${schedTime}` : `📅 ${formatDueLabel(schedDate)}`;
+    const label = schedTime ? `📅 ${schedTime}` : `📅 ${formatDayLabel(parseISTDate(schedDate))}`;
     if (!muted && onSchedule) {
       meta.push(
         <button
           key="sched"
           type="button"
+          onPointerDown={stopPointerPropagation}
           onClick={() => {
             haptic('tap');
             onSchedule(task);
@@ -83,70 +82,33 @@ export function TaskCard({
       );
     } else {
       meta.push(
-        <span key="sched" className="rounded-full border border-emerald-700/60 bg-emerald-500/10 px-1.5 py-0 text-emerald-200">
+        <span
+          key="sched"
+          className="rounded-full border border-emerald-700/60 bg-emerald-500/10 px-1.5 py-0 text-emerald-200"
+        >
           {label}
         </span>,
       );
     }
-  } else if (!muted && onSchedule) {
-    meta.push(
-      <button
-        key="sched"
-        type="button"
-        aria-label="Schedule on calendar"
-        onClick={() => {
-          haptic('tap');
-          onSchedule(task);
-        }}
-        className="border-b border-dashed border-slate-700 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-300"
-      >
-        📅
-      </button>,
-    );
   }
 
   const checkable = !muted && Boolean(onComplete);
   const reopenable = Boolean(muted) && Boolean(onReopen);
   const interactive = checkable || reopenable;
   const inProgress = task.status === 'in_progress';
-  const longPressTimer = useRef<number | null>(null);
-  const longPressFired = useRef<boolean>(false);
 
-  const clearLongPress = () => {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handlePointerDown = () => {
-    if (!checkable || !onStart || inProgress) return;
-    longPressFired.current = false;
-    longPressTimer.current = window.setTimeout(() => {
-      longPressFired.current = true;
-      longPressTimer.current = null;
-      haptic('submitStart');
-      onStart(task.id);
-    }, LONG_PRESS_MS);
-  };
-
-  const handleClick = () => {
-    if (longPressFired.current) {
-      // Long-press already fired — swallow the trailing click so we don't
-      // also mark it done.
-      longPressFired.current = false;
-      return;
-    }
-    clearLongPress();
-    if (reopenable && onReopen) {
-      haptic('tap');
-      onReopen(task.id);
-      return;
-    }
-    if (!checkable || !onComplete) return;
-    haptic('tap');
-    onComplete(task.id);
-  };
+  // Long-press the text-area (not the checkbox) to open Calendar prefilled.
+  // Disabled when muted (done tasks shouldn't be rescheduled inline) or when
+  // the consumer didn't wire onSchedule.
+  const bodyPress = useLongPress({
+    onLongPress:
+      !muted && onSchedule
+        ? () => {
+            haptic('submitStart');
+            onSchedule(task);
+          }
+        : undefined,
+  });
 
   return (
     <li
@@ -165,16 +127,21 @@ export function TaskCard({
                 : 'Completed'
               : inProgress
                 ? 'In progress — tap to complete'
-                : 'Mark as done — long press to start'
+                : 'Mark as done'
           }
           aria-pressed={muted}
           disabled={!interactive}
-          onClick={handleClick}
-          onPointerDown={handlePointerDown}
-          onPointerUp={clearLongPress}
-          onPointerLeave={clearLongPress}
-          onPointerCancel={clearLongPress}
-          onContextMenu={(e) => e.preventDefault()}
+          onPointerDown={stopPointerPropagation}
+          onClick={() => {
+            if (reopenable && onReopen) {
+              haptic('tap');
+              onReopen(task.id);
+              return;
+            }
+            if (!checkable || !onComplete) return;
+            haptic('tap');
+            onComplete(task.id);
+          }}
           className={[
             'mt-0.5 flex h-5 w-5 shrink-0 select-none items-center justify-center rounded border transition active:scale-90',
             muted
@@ -194,7 +161,11 @@ export function TaskCard({
           )}
         </button>
 
-        <div className="min-w-0 flex-1">
+        <div
+          className="min-w-0 flex-1"
+          style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}
+          {...bodyPress}
+        >
           <div className="flex items-start gap-2">
             <p
               className={[
@@ -223,11 +194,16 @@ export function TaskCard({
   );
 }
 
-function formatDueLabel(due: string): string {
-  // Parse YYYY-MM-DD as midnight in IST so the relative label aligns with the
-  // user's wall-clock day, not UTC.
-  const date = new Date(`${due}T00:00:00+05:30`);
-  return formatDayLabel(date);
+// Stop a pointerdown from bubbling into the card body's long-press timer so
+// tapping a chip or the checkbox doesn't also queue a schedule.
+function stopPointerPropagation(e: React.PointerEvent) {
+  e.stopPropagation();
+}
+
+// Parse YYYY-MM-DD as midnight IST so the relative label aligns with the
+// user's wall-clock day, not UTC.
+function parseISTDate(yyyyMmDd: string): Date {
+  return new Date(`${yyyyMmDd}T00:00:00+05:30`);
 }
 
 function dueChipTone(category: TaskCategory | undefined, hasDue: boolean): string {

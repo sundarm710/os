@@ -171,18 +171,46 @@ export function shiftKolkataDate(now: Date, days: number): string {
 }
 
 /**
- * Human label for the day a Date falls on, in IST: "Today", "Tomorrow",
- * "Yesterday", or fallback "May 9". Pure — caller passes `now` in tests.
+ * Day labels come in two flavours; pick whichever fits the surface.
+ *   formatDayLabel      — terse: Today / Tmr / Yest / "22". For dense chips
+ *                         (TaskCard meta row, replan tiles) where space is tight.
+ *   formatDayLabelLong  — verbose: Today / Tomorrow / Yesterday / "Mon, May 22".
+ *                         For larger surfaces (Calendar dial) where the full
+ *                         word reads better than an abbreviation.
+ *
+ * Both share the same "today/±1 day" detection, in IST. Both are pure — pass
+ * `now` in tests to pin the relative anchor.
  */
 export function formatDayLabel(d: Date, now: Date = new Date()): string {
-  const dKey = kolkataDateString(d);
-  const todayKey = kolkataDateString(now);
-  if (dKey === todayKey) return 'Today';
-  if (dKey === kolkataDateString(addMinutes(now, 24 * 60))) return 'Tmr';
-  if (dKey === kolkataDateString(addMinutes(now, -24 * 60))) return 'Yest';
+  const rel = _relativeKey(d, now);
+  if (rel === 'today') return 'Today';
+  if (rel === 'tomorrow') return 'Tmr';
+  if (rel === 'yesterday') return 'Yest';
+  return new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(d);
+}
+
+export function formatDayLabelLong(d: Date, now: Date = new Date()): string {
+  const rel = _relativeKey(d, now);
+  if (rel === 'today') return 'Today';
+  if (rel === 'tomorrow') return 'Tomorrow';
+  if (rel === 'yesterday') return 'Yesterday';
   return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
     day: 'numeric',
   }).format(d);
+}
+
+function _relativeKey(
+  d: Date,
+  now: Date,
+): 'today' | 'tomorrow' | 'yesterday' | 'other' {
+  const dKey = kolkataDateString(d);
+  const todayKey = kolkataDateString(now);
+  if (dKey === todayKey) return 'today';
+  if (dKey === kolkataDateString(addMinutes(now, 24 * 60))) return 'tomorrow';
+  if (dKey === kolkataDateString(addMinutes(now, -24 * 60))) return 'yesterday';
+  return 'other';
 }
 
 /**

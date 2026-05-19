@@ -11,7 +11,7 @@ import {
   addMinutes,
   ceilToQuarterHour,
   formatDateTime,
-  formatDayLabel,
+  formatDayLabelLong,
   formatForGCal,
   formatTime,
   formatTime24,
@@ -21,6 +21,7 @@ import {
   snapToQuarterHour,
 } from '../lib/time';
 import { useCalendarEvents } from '../lib/useCalendarEvents';
+import { useLongPress } from '../lib/useLongPress';
 import { useSubmission } from '../lib/useSubmission';
 import { DialRow } from '../components/DialRow';
 import { EventList } from '../components/EventList';
@@ -50,14 +51,47 @@ function initialTitle(): string {
 function initialFromPrefill() {
   const p = readCalendarPrefill();
   if (!p) return null;
-  // Build start = prefill date at next-quarter-hour wall-clock IST. Browser is
-  // assumed to be IST throughout this app; constructing via the +05:30 ISO
+  // Prefer the prefill's startTime when present (re-scheduling an already
+  // scheduled task lands on the same time); otherwise use the next quarter
+  // hour. Browser is assumed to be IST; constructing via the +05:30 ISO
   // suffix sidesteps tz drift on devices in other zones.
-  const nq = nextQuarterHour(new Date());
-  const hh = String(nq.getHours()).padStart(2, '0');
-  const mm = String(nq.getMinutes()).padStart(2, '0');
+  let hh: string;
+  let mm: string;
+  if (p.startTime && /^\d{2}:\d{2}$/.test(p.startTime)) {
+    [hh, mm] = p.startTime.split(':');
+  } else {
+    const nq = nextQuarterHour(new Date());
+    hh = String(nq.getHours()).padStart(2, '0');
+    mm = String(nq.getMinutes()).padStart(2, '0');
+  }
   const start = new Date(`${p.date}T${hh}:${mm}:00+05:30`);
   return { title: p.title, start, durationMin: p.durationMin, taskId: p.taskId };
+}
+
+/**
+ * Title-button activeness recognizes both:
+ *   - the bare prefix ("Build" matches "Build" and "Build [Workout]")
+ *   - bracketed tags  ("Workout" matches "Build [Workout]")
+ * so the user gets visual feedback on the composed title in either role.
+ */
+function isTitleActive(currentTitle: string, candidate: string): boolean {
+  const t = currentTitle.trim();
+  if (t === candidate) return true;
+  if (t.startsWith(`${candidate} [`)) return true;
+  if (t.includes(`[${candidate}]`)) return true;
+  return false;
+}
+
+/**
+ * Append `[Tag]` to the title for downstream categorisation. Idempotent — a
+ * tag already present (as bare prefix or bracketed) is left alone, so
+ * long-pressing the same chip twice doesn't double-up.
+ */
+function appendTitleTag(currentTitle: string, tag: string): string {
+  const t = currentTitle.trim();
+  if (t === tag || t.startsWith(`${tag} [`) || t.includes(`[${tag}]`)) return t;
+  const marker = `[${tag}]`;
+  return t ? `${t} ${marker}` : marker;
 }
 
 export default function Calendar() {
@@ -174,26 +208,19 @@ export default function Calendar() {
       <div className="flex flex-col gap-2">
         {TITLE_ROWS.map((row, idx) => (
           <div key={idx} className="grid grid-cols-4 gap-2">
-            {row.map((t) => {
-              const isActive = trimmedTitle === t;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => pickTitle(t)}
-                  disabled={isSending}
-                  className={[
-                    'rounded-full border px-3 py-2 text-center text-sm font-medium transition active:scale-95',
-                    isActive
-                      ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200'
-                      : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700',
-                  ].join(' ')}
-                >
-                  {t}
-                </button>
-              );
-            })}
+            {row.map((t) => (
+              <TitleButton
+                key={t}
+                label={t}
+                active={isTitleActive(trimmedTitle, t)}
+                disabled={isSending}
+                onPick={() => pickTitle(t)}
+                onAppend={() => {
+                  haptic('submitStart');
+                  setTitle((cur) => appendTitleTag(cur, t));
+                }}
+              />
+            ))}
           </div>
         ))}
         <input
@@ -210,7 +237,7 @@ export default function Calendar() {
       <div className="grid grid-cols-3 gap-2">
         <DialRow
           label="Date"
-          value={formatDayLabel(start)}
+          value={formatDayLabelLong(start)}
           onStep={stepDate}
           disabled={isSending}
         />
@@ -290,6 +317,39 @@ function nextFreeStart(events: CalendarEvent[], now: Date): Date {
     cursor = ceilToQuarterHour(new Date(event.end));
   }
   return cursor;
+}
+
+function TitleButton({
+  label,
+  active,
+  disabled,
+  onPick,
+  onAppend,
+}: {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onPick: () => void;
+  onAppend: () => void;
+}) {
+  const press = useLongPress({ onShortPress: onPick, onLongPress: onAppend });
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled}
+      style={{ touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}
+      {...press}
+      className={[
+        'rounded-full border px-3 py-2 text-center text-sm font-medium transition active:scale-95',
+        active
+          ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200'
+          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700',
+      ].join(' ')}
+    >
+      {label}
+    </button>
+  );
 }
 
 function SummaryFooter({ start, end }: { start: Date; end: Date }) {
