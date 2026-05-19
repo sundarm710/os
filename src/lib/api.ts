@@ -58,6 +58,10 @@ export type Task = {
   status: TaskStatus;
   category?: TaskCategory; // present on open tasks
   completed?: string; // YYYY-MM-DD, present on done tasks
+  // ISO local-ish: "YYYY-MM-DDTHH:MM" when a calendar block exists,
+  // "YYYY-MM-DD" when only an Obsidian-Tasks ⏳ date was set manually,
+  // null/absent when unscheduled.
+  scheduled_at?: string | null;
 };
 
 type TasksResponse = { tasks: Task[] };
@@ -214,6 +218,7 @@ type TaskActionRequest =
   | { action: 'cancel'; id: string }
   | { action: 'status'; id: string; status: TaskStatus }
   | { action: 'due'; id: string; date: string | null }
+  | { action: 'schedule'; id: string; date: string; time: string }
   | {
       action: 'add';
       text: string;

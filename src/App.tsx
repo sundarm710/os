@@ -5,6 +5,7 @@ import Tasks from './pages/Tasks';
 import Journal from './pages/Journal';
 import Calendar from './pages/Calendar';
 import Workouts from './pages/Workouts';
+import Learn from './pages/Learn';
 import { TabBar } from './components/TabBar';
 
 export default function App() {
@@ -14,10 +15,11 @@ export default function App() {
   return (
     <>
       <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-24 pt-12">
-        {page === 'tasks' && <Tasks />}
+        {page === 'tasks' && <Tasks onNavigate={setPage} />}
         {page === 'journal' && <Journal />}
         {page === 'calendar' && <Calendar />}
         {page === 'workouts' && <Workouts />}
+        {page === 'learn' && <Learn />}
       </main>
       <TabBar active={page} onChange={setPage} />
     </>

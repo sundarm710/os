@@ -207,3 +207,26 @@ export function formatRelative(then: Date, now: Date = new Date()): string {
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
 }
+
+/**
+ * Parse common estimate strings into minutes. Accepts bare integers (= min),
+ * `Nm`, `Nh`, `NhMm`, and tolerates whitespace. Returns null on anything else
+ * so callers can fall back to their own default rather than silently using 0.
+ *
+ *   "30"     → 30
+ *   "45m"    → 45
+ *   "1h"     → 60
+ *   "1h30m"  → 90
+ *   "2 hr"   → null  (intentionally strict; add a case if this shows up)
+ */
+export function parseEstMinutes(est: string | null | undefined): number | null {
+  if (!est) return null;
+  const s = est.trim().toLowerCase();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const m = /^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/.exec(s);
+  if (!m || (!m[1] && !m[2])) return null;
+  const hours = m[1] ? parseInt(m[1], 10) : 0;
+  const mins = m[2] ? parseInt(m[2], 10) : 0;
+  const total = hours * 60 + mins;
+  return total > 0 ? total : null;
+}

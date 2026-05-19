@@ -13,6 +13,8 @@ interface Props {
   onStart?: (id: string) => void;
   onReopen?: (id: string) => void;
   onReschedule?: (id: string) => void;
+  /** Open the Calendar tab prefilled with this task. */
+  onSchedule?: (task: Task) => void;
 }
 
 export function TaskCard({
@@ -23,6 +25,7 @@ export function TaskCard({
   onStart,
   onReopen,
   onReschedule,
+  onSchedule,
 }: Props) {
   const meta: ReactNode[] = [];
 
@@ -55,6 +58,51 @@ export function TaskCard({
   }
   if (task.est) {
     meta.push(<span key="est">{task.est}</span>);
+  }
+
+  // Scheduled badge: present iff pm_headless extracted an ⏳ field. When time
+  // is present we show it; otherwise just the date. Tapping re-opens the
+  // Calendar prefilled — re-scheduling overwrites the ⏳ stamp (a stale GCal
+  // event from the previous schedule is the known gap noted in the plan).
+  if (task.scheduled_at) {
+    const [schedDate, schedTime] = task.scheduled_at.split('T');
+    const label = schedTime ? `📅 ${schedTime}` : `📅 ${formatDueLabel(schedDate)}`;
+    if (!muted && onSchedule) {
+      meta.push(
+        <button
+          key="sched"
+          type="button"
+          onClick={() => {
+            haptic('tap');
+            onSchedule(task);
+          }}
+          className="rounded-full border border-emerald-700/60 bg-emerald-500/10 px-1.5 py-0 text-emerald-200 transition hover:border-emerald-400"
+        >
+          {label}
+        </button>,
+      );
+    } else {
+      meta.push(
+        <span key="sched" className="rounded-full border border-emerald-700/60 bg-emerald-500/10 px-1.5 py-0 text-emerald-200">
+          {label}
+        </span>,
+      );
+    }
+  } else if (!muted && onSchedule) {
+    meta.push(
+      <button
+        key="sched"
+        type="button"
+        aria-label="Schedule on calendar"
+        onClick={() => {
+          haptic('tap');
+          onSchedule(task);
+        }}
+        className="border-b border-dashed border-slate-700 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-300"
+      >
+        📅
+      </button>,
+    );
   }
 
   const checkable = !muted && Boolean(onComplete);

@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
-import { kolkataDateString } from '../lib/time';
+import { kolkataDateString, parseEstMinutes } from '../lib/time';
 import { useTasks } from '../lib/useTasks';
+import { writeCalendarPrefill } from '../lib/storage';
+import { type Page } from '../routes';
 import { AddTaskSheet } from '../components/AddTaskSheet';
 import { DateSheet } from '../components/DateSheet';
 import { PageHeader } from '../components/PageHeader';
 import { ReplanFlow } from '../components/ReplanFlow';
 import { TaskCard } from '../components/TaskCard';
+
+const DEFAULT_SCHEDULE_DURATION_MIN = 30;
 
 const REPLAN_CATEGORIES: TaskCategory[] = ['OVERDUE', 'TODAY', 'NO_DATE'];
 
@@ -46,7 +50,9 @@ function byDueAscending(a: Task, b: Task): number {
   return da.localeCompare(db);
 }
 
-export default function Tasks() {
+type TasksProps = { onNavigate: (page: Page) => void };
+
+export default function Tasks({ onNavigate }: TasksProps) {
   const {
     open,
     done,
@@ -86,6 +92,16 @@ export default function Tasks() {
 
   const lastUsedProject =
     open.find((t) => t.project)?.project ?? projects?.[0] ?? null;
+
+  function handleSchedule(task: Task) {
+    writeCalendarPrefill({
+      taskId: task.id,
+      title: task.text,
+      date: task.due ?? kolkataDateString(new Date()),
+      durationMin: parseEstMinutes(task.est) ?? DEFAULT_SCHEDULE_DURATION_MIN,
+    });
+    onNavigate('calendar');
+  }
 
   if (replanQueue) {
     return (
@@ -149,6 +165,7 @@ export default function Tasks() {
               onComplete={complete}
               onStart={start}
               onReschedule={setReschedulingId}
+              onSchedule={handleSchedule}
             />
           ))
         : SECTION_ORDER.map((cat) => {
@@ -178,6 +195,7 @@ export default function Tasks() {
                 onComplete={complete}
                 onStart={start}
                 onReschedule={setReschedulingId}
+                onSchedule={handleSchedule}
               />
             );
           })}
@@ -303,6 +321,7 @@ function Section({
   onStart,
   onReopen,
   onReschedule,
+  onSchedule,
 }: {
   label: string;
   toneClass: string;
@@ -313,6 +332,7 @@ function Section({
   onStart?: (id: string) => void;
   onReopen?: (id: string) => void;
   onReschedule?: (id: string) => void;
+  onSchedule?: (task: Task) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -337,6 +357,7 @@ function Section({
             onStart={onStart}
             onReopen={onReopen}
             onReschedule={onReschedule}
+            onSchedule={onSchedule}
           />
         ))}
       </ul>

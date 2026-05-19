@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { type CalendarEvent, type CalendarPayload } from '../lib/api';
+import { type CalendarEvent, type CalendarPayload, postTaskAction } from '../lib/api';
 import { haptic } from '../lib/haptic';
-import { readString, writeString } from '../lib/storage';
+import {
+  clearCalendarPrefill,
+  readCalendarPrefill,
+  readString,
+  writeString,
+} from '../lib/storage';
 import {
   addMinutes,
   ceilToQuarterHour,
@@ -42,10 +47,33 @@ function initialTitle(): string {
   return stored?.trim() ? stored : DEFAULT_TITLE;
 }
 
+function initialFromPrefill() {
+  const p = readCalendarPrefill();
+  if (!p) return null;
+  // Build start = prefill date at next-quarter-hour wall-clock IST. Browser is
+  // assumed to be IST throughout this app; constructing via the +05:30 ISO
+  // suffix sidesteps tz drift on devices in other zones.
+  const nq = nextQuarterHour(new Date());
+  const hh = String(nq.getHours()).padStart(2, '0');
+  const mm = String(nq.getMinutes()).padStart(2, '0');
+  const start = new Date(`${p.date}T${hh}:${mm}:00+05:30`);
+  return { title: p.title, start, durationMin: p.durationMin, taskId: p.taskId };
+}
+
 export default function Calendar() {
-  const [title, setTitle] = useState<string>(initialTitle);
-  const [start, setStart] = useState<Date>(() => nextQuarterHour(new Date()));
-  const [durationMin, setDurationMin] = useState<number>(DEFAULT_DURATION_MIN);
+  const initialPrefill = initialFromPrefill();
+  const [title, setTitle] = useState<string>(
+    () => initialPrefill?.title ?? initialTitle(),
+  );
+  const [start, setStart] = useState<Date>(
+    () => initialPrefill?.start ?? nextQuarterHour(new Date()),
+  );
+  const [durationMin, setDurationMin] = useState<number>(
+    () => initialPrefill?.durationMin ?? DEFAULT_DURATION_MIN,
+  );
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(
+    initialPrefill?.taskId ?? null,
+  );
 
   const { status, error, submit } = useSubmission<CalendarPayload>('calendar');
   const {
@@ -83,6 +111,12 @@ export default function Calendar() {
 
   async function handleSubmit() {
     if (!canSubmit) return;
+    // Snapshot values that handleSubmit needs after the await; state setters
+    // below shift `start` to `end`, so reading start later would give wrong
+    // date/time for the post-schedule task update.
+    const scheduledStart = start;
+    const taskId = pendingTaskId;
+
     await submit(() => ({
       title: trimmedTitle,
       start_time: formatForGCal(start, TIMEZONE),
@@ -90,6 +124,26 @@ export default function Calendar() {
       timezone: TIMEZONE,
     }));
     writeString('calendarLastTitle', trimmedTitle);
+
+    if (taskId) {
+      // Best-effort: stamp ⏳ on the task line. If this fails (offline, server
+      // hiccup) the GCal event is still saved; the user can re-tap 📅 on the
+      // task to retry. Known gap: that retry will leave the prior GCal event
+      // orphaned — closed by future bidirectional work.
+      try {
+        await postTaskAction({
+          action: 'schedule',
+          id: taskId,
+          date: kolkataDateString(scheduledStart),
+          time: formatTime24(scheduledStart),
+        });
+      } catch (e) {
+        console.warn('schedule action failed', e);
+      }
+      clearCalendarPrefill();
+      setPendingTaskId(null);
+    }
+
     // Land Start exactly on the just-scheduled event's end so back-to-back
     // blocks chain naturally — no quarter-hour rounding gap.
     setStart(end);
