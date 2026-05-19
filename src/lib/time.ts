@@ -95,6 +95,15 @@ export function formatTime(d: Date): string {
   }).format(d);
 }
 
+/** 24-hour wall-clock time, e.g. "14:45". */
+export function formatTime24(d: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
 /**
  * Format with month + day + time (e.g. "May 7 · 2:45 PM"). Used for the
  * Calendar summary footer where the user needs the date so day-rollover is
@@ -169,10 +178,9 @@ export function formatDayLabel(d: Date, now: Date = new Date()): string {
   const dKey = kolkataDateString(d);
   const todayKey = kolkataDateString(now);
   if (dKey === todayKey) return 'Today';
-  if (dKey === kolkataDateString(addMinutes(now, 24 * 60))) return 'Tomorrow';
-  if (dKey === kolkataDateString(addMinutes(now, -24 * 60))) return 'Yesterday';
+  if (dKey === kolkataDateString(addMinutes(now, 24 * 60))) return 'Tmr';
+  if (dKey === kolkataDateString(addMinutes(now, -24 * 60))) return 'Yest';
   return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
     day: 'numeric',
   }).format(d);
 }

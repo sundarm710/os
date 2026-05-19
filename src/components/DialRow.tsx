@@ -69,8 +69,14 @@ export function DialRow({
       return;
     }
 
-    onStep(direction);
-    haptic('tap');
+    // Emit one step per boundary crossed — fast drags can jump multiple
+    // STEP_PX in a single pointermove, and dropping the extras makes the
+    // dial feel sticky (especially on fine-grained scales like 15-min time).
+    const stepsToEmit = Math.abs(stepIndex - lastStepIndex.current);
+    for (let i = 0; i < stepsToEmit; i++) {
+      onStep(direction);
+      haptic('tap');
+    }
     lastStepIndex.current = stepIndex;
   }
 
@@ -113,7 +119,7 @@ export function DialRow({
           onTap={onLeftEdgeTap}
           enabled={canDecrement && !disabled}
         />
-        <span className="text-xl font-semibold tabular-nums text-slate-100">
+        <span className="flex-1 text-center text-base font-semibold tabular-nums text-slate-100">
           {value}
         </span>
         <EdgeArrow

@@ -6,8 +6,10 @@ import {
   addMinutes,
   ceilToQuarterHour,
   formatDateTime,
+  formatDayLabel,
   formatForGCal,
   formatTime,
+  formatTime24,
   kolkataDateString,
   nextQuarterHour,
   previousQuarterHour,
@@ -69,6 +71,10 @@ export default function Calendar() {
 
   function stepStart(direction: 1 | -1) {
     setStart((prev) => snapToQuarterHour(addMinutes(prev, direction * STEP_MIN)));
+  }
+
+  function stepDate(direction: 1 | -1) {
+    setStart((prev) => addMinutes(prev, direction * 24 * 60));
   }
 
   function stepDuration(direction: 1 | -1) {
@@ -147,10 +153,17 @@ export default function Calendar() {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-2">
+        <DialRow
+          label="Date"
+          value={formatDayLabel(start)}
+          onStep={stepDate}
+          disabled={isSending}
+        />
+
         <DialRow
           label="Start"
-          value={formatTime(start)}
+          value={formatTime24(start)}
           onStep={stepStart}
           onLeftEdgeTap={() => setStart(previousQuarterHour(new Date()))}
           onRightEdgeTap={() => setStart(nextFreeStart(events, new Date()))}
@@ -159,7 +172,7 @@ export default function Calendar() {
 
         <DialRow
           label="Duration"
-          value={`${durationMin} min`}
+          value={`${durationMin}`}
           onStep={stepDuration}
           canDecrement={durationMin > STEP_MIN}
           onLeftEdgeTap={() => {
