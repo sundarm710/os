@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { haptic } from '../lib/haptic';
 import { kolkataDateString, shiftKolkataDate } from '../lib/time';
 
@@ -20,6 +20,12 @@ export function DateSheet({
   onCancel,
 }: Props) {
   const [customDate, setCustomDate] = useState<string>('');
+
+  // Seed the date input with the task's current due date each time the sheet
+  // opens so the user is editing-in-place rather than picking from a blank.
+  useEffect(() => {
+    if (open) setCustomDate(currentDue ?? '');
+  }, [open, currentDue]);
 
   if (!open) return null;
 
