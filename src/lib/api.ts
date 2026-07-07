@@ -74,6 +74,7 @@ const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
 const CALENDAR_FETCH_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_FETCH_URL;
 const TASKS_URL = import.meta.env.VITE_WEBHOOK_TASKS_URL;
 const WORKOUTS_FETCH_URL = import.meta.env.VITE_WEBHOOK_WORKOUTS_FETCH_URL;
+const NOTES_URL = import.meta.env.VITE_WEBHOOK_NOTES_URL;
 
 export type WorkoutSessionType = 'strength' | 'cardio';
 export type WorkoutFetchType = WorkoutSessionType | 'all';
@@ -367,4 +368,57 @@ export async function createPerson(
 ): Promise<{ filePath: string; name: string }> {
   const res = await postJson(PEOPLE_URL, { action: 'create', name, birthday, howKnow, keyFacts });
   return (await res.json()) as { filePath: string; name: string };
+}
+
+// ─── Notes (vault browser) ─────────────────────────────────────────────────────
+
+export type NoteSearchResult = {
+  title: string;
+  path: string;
+  folder: string;
+  score: number;
+  snippet: string;
+  matchType: 'title' | 'content' | string;
+};
+
+// A resolved wikilink. `exists: false` means the target note isn't in the vault
+// yet (an unresolved [[link]]) — the UI renders those as non-navigable.
+export type NoteLink = {
+  title: string;
+  path: string;
+  exists: boolean;
+  excerpt: string;
+};
+
+export type NoteBacklink = {
+  title: string;
+  path: string;
+  excerpt: string;
+};
+
+export type NoteDetail = {
+  title: string;
+  path: string;
+  folder: string;
+  frontmatter: Record<string, string>;
+  tags: string[];
+  body: string;
+  outgoing: NoteLink[];
+  backlinks: NoteBacklink[];
+};
+
+export async function searchNotes(query: string): Promise<NoteSearchResult[]> {
+  const res = await postJson(NOTES_URL, { action: 'search', query });
+  const data = (await res.json()) as { ok?: boolean; results?: NoteSearchResult[] };
+  return data.results ?? [];
+}
+
+export async function fetchNote(path: string): Promise<NoteDetail> {
+  const res = await postJson(NOTES_URL, { action: 'get', path });
+  const data = (await res.json()) as ({ ok: true } & NoteDetail) | { ok: false; error: string };
+  if (!('ok' in data) || !data.ok) {
+    throw new Error(('error' in data && data.error) || 'note not found');
+  }
+  const { ...note } = data;
+  return note as NoteDetail;
 }

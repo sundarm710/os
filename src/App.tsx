@@ -8,6 +8,7 @@ import Calendar from './pages/Calendar';
 import Workouts from './pages/Workouts';
 import Learn from './pages/Learn';
 import People from './pages/People';
+import Notes from './pages/Notes';
 import { TabBar } from './components/TabBar';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
         {page === 'workouts' && <Workouts />}
         {page === 'learn' && <Learn />}
         {page === 'people' && <People />}
+        {page === 'notes' && <Notes />}
       </main>
       <TabBar active={page} onChange={setPage} />
     </>
