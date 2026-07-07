@@ -335,9 +335,9 @@ function Section({
   tasks: Task[];
   muted?: boolean;
   hideProject?: boolean;
-  onComplete?: (id: string) => void;
-  onReopen?: (id: string) => void;
-  onReschedule?: (id: string) => void;
+  onComplete?: (id: string | null) => void;
+  onReopen?: (id: string | null) => void;
+  onReschedule?: (id: string | null) => void;
   onSchedule?: (task: Task) => void;
 }) {
   return (

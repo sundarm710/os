@@ -28,6 +28,8 @@ export async function postJson<TPayload>(
   payload: TPayload,
   options?: { timeoutMs?: number },
 ): Promise<Response> {
+  // Callers needing more than the default (e.g. SO-Learn answer waits on a
+  // Claude Sonnet call that routinely runs 20–40s) pass `timeoutMs` explicitly.
   if (!url) throw new Error('Webhook URL is empty — check VITE_WEBHOOK_* env vars');
   const token = readAuthToken();
   if (!token) throw new Error('Missing VITE_AUTH_TOKEN');

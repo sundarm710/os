@@ -5,8 +5,8 @@ import { DateSheet } from './DateSheet';
 
 interface Props {
   tasks: Task[];
-  onComplete: (id: string) => void;
-  onReschedule: (id: string, date: string | null) => void;
+  onComplete: (id: string | null) => void;
+  onReschedule: (id: string | null, date: string | null) => void;
   onExit: () => void;
 }
 

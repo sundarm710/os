@@ -47,7 +47,7 @@ export type TaskCategory =
 export type TaskStatus = 'open' | 'in_progress' | 'done' | 'cancelled';
 
 export type Task = {
-  id: string;
+  id: string | null;
   text: string;
   project: string;
   due: string | null; // YYYY-MM-DD or null
@@ -66,6 +66,8 @@ export type Task = {
 
 type TasksResponse = { tasks: Task[] };
 
+const DAILY_NOTE_URL = import.meta.env.VITE_WEBHOOK_DAILY_NOTE_URL;
+const PEOPLE_URL = import.meta.env.VITE_WEBHOOK_PEOPLE_URL;
 const JOURNAL_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_URL;
 const JOURNAL_FETCH_URL = import.meta.env.VITE_WEBHOOK_JOURNAL_FETCH_URL;
 const CALENDAR_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_URL;
@@ -127,6 +129,49 @@ export type WorkoutsFetchOptions = {
   limit?: number;
   before_date?: string;
 };
+
+export type DailyNoteFieldType = 'boolean' | 'rating' | 'number' | 'text';
+
+export type DailyNoteField = {
+  key: string;
+  type: DailyNoteFieldType;
+  label: string;
+};
+
+type DailyNoteSchemaResponse =
+  | { ok: true; fields: DailyNoteField[] }
+  | { ok: false; error: string };
+
+type DailyNoteFetchResponse =
+  | { ok: true; found: boolean; values: Record<string, string> }
+  | { ok: false; error: string };
+
+type DailyNoteSaveResponse =
+  | { ok: true; date: string; updated: number }
+  | { ok: false; error: string };
+
+export async function fetchDailyNoteSchema(): Promise<DailyNoteField[]> {
+  const res = await postJson(DAILY_NOTE_URL, { action: 'schema' });
+  const data = (await res.json()) as DailyNoteSchemaResponse;
+  if (!data.ok) throw new Error(data.error || 'schema fetch failed');
+  return data.fields;
+}
+
+export async function fetchDailyNote(date: string): Promise<Record<string, string>> {
+  const res = await postJson(DAILY_NOTE_URL, { action: 'fetch', date });
+  const data = (await res.json()) as DailyNoteFetchResponse;
+  if (!data.ok) throw new Error(data.error || 'daily note fetch failed');
+  return data.values;
+}
+
+export async function saveDailyNote(
+  date: string,
+  values: Record<string, string>,
+): Promise<void> {
+  const res = await postJson(DAILY_NOTE_URL, { action: 'save', date, values });
+  const data = (await res.json()) as DailyNoteSaveResponse;
+  if (!data.ok) throw new Error(data.error || 'daily note save failed');
+}
 
 export async function postJournal(payload: JournalPayload): Promise<void> {
   await postJson(JOURNAL_URL, payload);
@@ -226,6 +271,7 @@ type TaskActionRequest =
       due?: string | null;
       est?: string;
       after?: string;
+      recur?: string;
     };
 type TaskActionResponse = { ok: true; task: Task } | { ok: false; error: string };
 
@@ -257,4 +303,68 @@ export async function fetchProjects(): Promise<string[]> {
   const res = await postJson(TASKS_URL, { action: 'projects' });
   const data = (await res.json()) as { projects?: string[] };
   return data.projects ?? [];
+}
+
+// ─── People ──────────────────────────────────────────────────────────────────
+
+export type ContactStatus = 'active' | 'no_contact';
+
+export type PersonSummary = {
+  name: string;
+  filePath: string;
+  lastContacted: string | null;
+  birthday: string | null;
+  preview: string | null;
+  snoozeUntil: string | null;
+  contactStatus: ContactStatus;
+};
+
+export type PersonSearchResult = {
+  name: string;
+  filePath: string;
+  score: number;
+  isPeople: boolean;
+  contentExcerpt: string | null;
+};
+
+export type PersonDetail = {
+  frontmatter: Record<string, string>;
+  interactions: Array<{ date: string; text: string }>;
+  rawBody: string;
+};
+
+export async function fetchPeople(): Promise<PersonSummary[]> {
+  const res = await postJson(PEOPLE_URL, { action: 'list' });
+  const data = (await res.json()) as { people: PersonSummary[] };
+  return data.people ?? [];
+}
+
+export async function searchPeople(query: string): Promise<PersonSearchResult[]> {
+  const res = await postJson(PEOPLE_URL, { action: 'search', query });
+  const data = (await res.json()) as { results: PersonSearchResult[] };
+  return data.results ?? [];
+}
+
+export async function fetchPerson(filePath: string): Promise<PersonDetail> {
+  const res = await postJson(PEOPLE_URL, { action: 'fetch', filePath });
+  return (await res.json()) as PersonDetail;
+}
+
+export async function savePerson(
+  filePath: string,
+  date: string,
+  text: string,
+  fmUpdates: Record<string, string>,
+): Promise<void> {
+  await postJson(PEOPLE_URL, { action: 'save', filePath, date, text, fmUpdates });
+}
+
+export async function createPerson(
+  name: string,
+  birthday: string,
+  howKnow: string,
+  keyFacts: string,
+): Promise<{ filePath: string; name: string }> {
+  const res = await postJson(PEOPLE_URL, { action: 'create', name, birthday, howKnow, keyFacts });
+  return (await res.json()) as { filePath: string; name: string };
 }

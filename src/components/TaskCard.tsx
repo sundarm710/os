@@ -8,9 +8,9 @@ interface Props {
   task: Task;
   muted?: boolean;
   hideProject?: boolean;
-  onComplete?: (id: string) => void;
-  onReopen?: (id: string) => void;
-  onReschedule?: (id: string) => void;
+  onComplete?: (id: string | null) => void;
+  onReopen?: (id: string | null) => void;
+  onReschedule?: (id: string | null) => void;
   /** Long-press the card body, or tap the scheduled-time badge, to fire. */
   onSchedule?: (task: Task) => void;
 }

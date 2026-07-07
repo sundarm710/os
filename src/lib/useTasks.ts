@@ -14,6 +14,7 @@ export type AddTaskParams = {
   project?: string;
   due?: string | null;
   est?: string;
+  recur?: string;
 };
 
 export function useTasks() {
@@ -46,7 +47,8 @@ export function useTasks() {
   // queue — done is a read-modify-write against backend state, where stale
   // operations could conflict with the real source of truth.
   const complete = useCallback(
-    async (id: string) => {
+    async (id: string | null) => {
+      if (!id) { setError('Task has no ID — open the vault to add one'); return; }
       const snapshot = open.find((t) => t.id === id);
       if (!snapshot) return;
 
@@ -63,13 +65,15 @@ export function useTasks() {
         const updated = await postTaskAction({ action: 'done', id });
         setDone((prev) => [updated, ...prev.filter((t) => t.id !== id)]);
         setError(null);
+        // Refresh to run materialize — creates the next occurrence of recurring tasks.
+        void refresh();
       } catch (e) {
         setOpen((prev) => [snapshot, ...prev]);
         setDone((prev) => prev.filter((t) => t.id !== id));
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [open],
+    [open, refresh],
   );
 
   // Tap a done task's checkbox to undo. Optimistically pull it back into the
@@ -77,7 +81,8 @@ export function useTasks() {
   // the snapshot into done. Backend uses the generic `status` action since
   // there's no dedicated `reopen` wrapper.
   const reopen = useCallback(
-    async (id: string) => {
+    async (id: string | null) => {
+      if (!id) { setError('Task has no ID — open the vault to add one'); return; }
       const snapshot = done.find((t) => t.id === id);
       if (!snapshot) return;
 
@@ -112,7 +117,8 @@ export function useTasks() {
   // and neither the open nor done list returns cancelled tasks. Optimistic:
   // drop from open immediately; restore on failure.
   const cancel = useCallback(
-    async (id: string) => {
+    async (id: string | null) => {
+      if (!id) { setError('Task has no ID — open the vault to add one'); return; }
       const snapshot = open.find((t) => t.id === id);
       if (!snapshot) return;
 
@@ -133,7 +139,8 @@ export function useTasks() {
   // the open list (server's `list` includes both open + in_progress); the
   // checkbox tints amber until tapped to complete or reverted server-side.
   const start = useCallback(
-    async (id: string) => {
+    async (id: string | null) => {
+      if (!id) { setError('Task has no ID — open the vault to add one'); return; }
       const snapshot = open.find((t) => t.id === id);
       if (!snapshot || snapshot.status === 'in_progress') return;
 
@@ -158,7 +165,8 @@ export function useTasks() {
   // success or revert on failure. Category is approximated client-side; the
   // server response corrects it (e.g. for week-boundary differences).
   const reschedule = useCallback(
-    async (id: string, date: string | null) => {
+    async (id: string | null, date: string | null) => {
+      if (!id) { setError('Task has no ID — open the vault to add one'); return; }
       const snapshot = open.find((t) => t.id === id);
       if (!snapshot) return;
 
@@ -208,6 +216,7 @@ export function useTasks() {
       ...(params.project !== undefined ? { project: params.project } : {}),
       ...(params.due !== undefined ? { due: params.due } : {}),
       ...(params.est !== undefined ? { est: params.est } : {}),
+      ...(params.recur ? { recur: params.recur } : {}),
     });
     setOpen((prev) => [created, ...prev]);
     setError(null);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import React, { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { fetchJournalLogs, type JournalLog, type JournalPayload } from '../lib/api';
 import { haptic } from '../lib/haptic';
 import { readString, writeString } from '../lib/storage';
@@ -9,6 +9,34 @@ import { StatusLine } from '../components/StatusLine';
 import { SubmitButton } from '../components/SubmitButton';
 
 type Rating = 1 | 2 | 3 | 4 | 5;
+
+const WIKILINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
+function renderWikiText(text: string) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  WIKILINK_RE.lastIndex = 0;
+  while ((match = WIKILINK_RE.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const note = match[1];
+    const display = match[2] ?? match[1];
+    const href = `obsidian://open?vault=sundar-vault&file=${encodeURIComponent(note)}`;
+    parts.push(
+      <a
+        key={match.index}
+        href={href}
+        onClick={e => e.stopPropagation()}
+        className="inline-block rounded-full border border-teal-700 bg-teal-900/40 px-2 py-0.5 text-xs font-medium text-teal-300 no-underline hover:border-teal-500 hover:text-teal-100 active:scale-95"
+      >
+        {display}
+      </a>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
 
 const EMOJIS: { rating: Rating; emoji: string; label: string }[] = [
   { rating: 1, emoji: '😞', label: 'Awful' },
@@ -454,8 +482,8 @@ export default function Journal() {
                     </button>
                   </div>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-200">
-                  {log.text}
+                <div className="mt-1 break-words text-sm leading-relaxed text-slate-200">
+                  {renderWikiText(log.text ?? '')}
                 </div>
               </li>
             );

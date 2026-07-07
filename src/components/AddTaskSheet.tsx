@@ -23,6 +23,7 @@ export function AddTaskSheet({
   const [newProject, setNewProject] = useState<string>('');
   const [showNewProject, setShowNewProject] = useState<boolean>(false);
   const [due, setDue] = useState<string | null>(null);
+  const [recur, setRecur] = useState<string | null>(null);
   const [est, setEst] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -34,6 +35,7 @@ export function AddTaskSheet({
       setNewProject('');
       setShowNewProject(false);
       setDue(null);
+      setRecur(null);
       setEst('');
       setSubmitting(false);
     }
@@ -60,6 +62,7 @@ export function AddTaskSheet({
         ...(finalProject ? { project: finalProject } : {}),
         ...(due !== null ? { due } : {}),
         ...(est.trim() ? { est: est.trim() } : {}),
+        ...(recur ? { recur } : {}),
       });
       haptic('successRamp');
       onClose();
@@ -202,6 +205,36 @@ export function AddTaskSheet({
 
         <div className="mt-4 flex flex-col gap-2">
           <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Repeat
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'Daily', value: 'every day' },
+              { label: 'Weekly', value: 'every week' },
+              { label: 'Fortnightly', value: 'every 2 weeks' },
+              (() => {
+                const monthDay = due
+                  ? parseInt(due.split('-')[2], 10)
+                  : parseInt(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata', day: 'numeric' }), 10);
+                const ord = ordinal(monthDay);
+                return { label: `Monthly (${ord})`, value: `every month on the ${ord}` };
+              })(),
+            ].map(({ label, value }) => (
+              <SmallChip
+                key={value}
+                label={label}
+                active={recur === value}
+                onClick={() => {
+                  haptic('tap');
+                  setRecur(recur === value ? null : value);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
             Estimate (optional)
           </span>
           <input
@@ -225,6 +258,12 @@ export function AddTaskSheet({
       </div>
     </>
   );
+}
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
 function SmallChip({

@@ -30,7 +30,7 @@ export function clearKey(key: StorageKey): void {
 const PREFILL_KEY = 'calendar:prefill';
 
 export type CalendarPrefill = {
-  taskId: string;
+  taskId: string | null;
   title: string;
   date: string;        // YYYY-MM-DD in Asia/Kolkata
   durationMin: number;
