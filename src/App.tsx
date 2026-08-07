@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDrainQueue } from './lib/useDrainQueue';
+import { useChatRecovery } from './lib/useChatRecovery';
 import { useIsKeyboardDevice } from './lib/usePlatform';
 import { DEFAULT_PAGE, PAGES, type Page } from './routes';
 import Chat from './pages/Chat';
@@ -16,6 +17,7 @@ import { LoginGate } from './components/LoginGate';
 
 export default function App() {
   useDrainQueue();
+  useChatRecovery();
   const [page, setPage] = useState<Page>(DEFAULT_PAGE);
   const isKeyboard = useIsKeyboardDevice();
 

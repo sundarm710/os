@@ -20,6 +20,7 @@ interface ImportMetaEnv {
   readonly VITE_WEBHOOK_LEARN_RESOURCES_URL: string;
   readonly VITE_WEBHOOK_LEARN_ANSWER_URL: string;
   readonly VITE_WEBHOOK_CHAT_URL: string;
+  readonly VITE_WEBHOOK_CHAT_STATUS_URL: string;
   /** Dev/test fallback only — production auth is the runtime token (lib/auth.ts). */
   readonly VITE_AUTH_TOKEN?: string;
   readonly MODE: string;

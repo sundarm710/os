@@ -1,70 +1,88 @@
 import { useEffect, useRef, useState } from 'react';
 import { Markdown } from '../../components/Markdown';
 import { newClientId } from '../../lib/queue';
-import { sendChat, type ChatMessage } from '../../lib/chat';
-
-// Thread survives tab switches (App unmounts pages) via sessionStorage.
-// It intentionally resets on a fresh app launch — the server keeps the
-// durable history and feeds recent turns back to the agent.
-const THREAD_KEY = 'chat:thread:v1';
-
-function loadThread(): ChatMessage[] {
-  try {
-    const raw = sessionStorage.getItem(THREAD_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ChatMessage[];
-    // A pending message from a previous mount can never resolve — mark failed.
-    return parsed.map((m) => (m.pending ? { ...m, pending: false, failed: true } : m));
-  } catch {
-    return [];
-  }
-}
-
-function saveThread(msgs: ChatMessage[]) {
-  try {
-    sessionStorage.setItem(THREAD_KEY, JSON.stringify(msgs.slice(-60)));
-  } catch {
-    /* storage full — thread is a convenience, not a record */
-  }
-}
+import { sendChat, checkChatStatus, type ChatMessage } from '../../lib/chat';
+import { loadThread, saveThread, subscribeThread } from '../../lib/chatThread';
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>(loadThread);
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => saveThread(messages), [messages]);
+  // Background recovery (useChatRecovery, mounted in App) can resolve a
+  // message while this page isn't mounted — subscribe so remounting always
+  // shows the latest state instead of what was true when we last unmounted.
+  useEffect(() => subscribeThread(setMessages), []);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, busy]);
+  }, [messages]);
+
+  function appendUser(text: string): ChatMessage {
+    const clientId = newClientId();
+    const now = Date.now();
+    const msg: ChatMessage = {
+      id: clientId,
+      role: 'user',
+      text,
+      at: now,
+      pending: true,
+      retries: 0,
+      sentAt: now,
+    };
+    saveThread([...loadThread(), msg]);
+    return msg;
+  }
+
+  function resolve(userMsgId: string, reply: { text: string; failed?: boolean }) {
+    const thread = loadThread();
+    const next = thread.map((m) => (m.id === userMsgId ? { ...m, pending: false } : m));
+    next.push({
+      id: userMsgId + (reply.failed ? ':e' : ':r'),
+      role: 'assistant',
+      text: reply.text,
+      at: Date.now(),
+      failed: reply.failed,
+    });
+    saveThread(next);
+  }
 
   async function handleSend() {
     const text = draft.trim();
-    if (!text || busy) return;
-
-    const clientId = newClientId();
-    const userMsg: ChatMessage = { id: clientId, role: 'user', text, at: Date.now() };
-    setMessages((m) => [...m, userMsg]);
+    if (!text || sending) return;
     setDraft('');
-    setBusy(true);
+    setSending(true);
 
-    const result = await sendChat(text, clientId);
-    setMessages((m) => [
-      ...m,
-      'reply' in result
-        ? { id: clientId + ':r', role: 'assistant', text: result.reply, at: Date.now() }
-        : {
-            id: clientId + ':e',
-            role: 'assistant',
-            text: '⚠️ ' + result.error,
-            at: Date.now(),
-            failed: true,
-          },
-    ]);
-    setBusy(false);
+    const userMsg = appendUser(text);
+    const result = await sendChat(userMsg.text, userMsg.id);
+
+    if (result.status === 'ok') {
+      resolve(userMsg.id, { text: result.reply });
+    } else if (result.status === 'error') {
+      resolve(userMsg.id, { text: '⚠️ ' + result.error, failed: true });
+    }
+    // status === 'unknown' (the app was backgrounded mid-request, or the
+    // connection just blipped): leave the message pending. It renders as
+    // "still working" below, and useChatRecovery resolves it in the
+    // background — via a status check first, a resend only if genuinely
+    // needed — whether or not this page stays open.
+
+    setSending(false);
     inputRef.current?.focus();
+  }
+
+  async function retryNow(msg: ChatMessage) {
+    const patched = { ...msg, sentAt: Date.now(), retries: (msg.retries ?? 0) + 1 };
+    saveThread(loadThread().map((m) => (m.id === msg.id ? patched : m)));
+    const status = await checkChatStatus(msg.id);
+    if (status.status === 'ok') {
+      resolve(msg.id, { text: status.reply });
+      return;
+    }
+    const result = await sendChat(msg.text, msg.id);
+    if (result.status === 'ok') resolve(msg.id, { text: result.reply });
+    else if (result.status === 'error') resolve(msg.id, { text: '⚠️ ' + result.error, failed: true });
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -73,6 +91,9 @@ export default function Chat() {
       void handleSend();
     }
   }
+
+  const stillStuck = (m: ChatMessage) =>
+    m.pending && (m.retries ?? 0) >= 2 && Date.now() - (m.sentAt ?? m.at) > 200_000;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -89,30 +110,39 @@ export default function Chat() {
           </div>
         )}
         {messages.map((m) => (
-          <div
-            key={m.id}
-            className={
-              m.role === 'user'
-                ? 'ml-8 rounded-2xl rounded-br-md bg-emerald-900/40 px-4 py-3'
-                : `mr-4 rounded-2xl rounded-bl-md border border-slate-800 px-4 py-3 ${
-                    m.failed ? 'bg-rose-950/40' : 'bg-slate-900'
-                  }`
-            }
-          >
-            {m.role === 'assistant' ? (
-              <Markdown text={m.text} className="text-sm text-slate-200" />
-            ) : (
-              <p className="whitespace-pre-wrap text-sm text-slate-100">{m.text}</p>
+          <div key={m.id}>
+            <div
+              className={
+                m.role === 'user'
+                  ? 'ml-8 rounded-2xl rounded-br-md bg-emerald-900/40 px-4 py-3'
+                  : `mr-4 rounded-2xl rounded-bl-md border border-slate-800 px-4 py-3 ${
+                      m.failed ? 'bg-rose-950/40' : 'bg-slate-900'
+                    }`
+              }
+            >
+              {m.role === 'assistant' ? (
+                <Markdown text={m.text} className="text-sm text-slate-200" />
+              ) : (
+                <p className="whitespace-pre-wrap text-sm text-slate-100">{m.text}</p>
+              )}
+            </div>
+            {m.role === 'user' && m.pending && (
+              <div className="ml-8 mt-1 flex items-center gap-2 text-xs text-slate-500">
+                <span className="animate-pulse">
+                  {stillStuck(m) ? 'Taking longer than usual…' : 'Still working — will update automatically'}
+                </span>
+                {stillStuck(m) && (
+                  <button
+                    onClick={() => void retryNow(m)}
+                    className="rounded-full border border-slate-700 px-2 py-0.5 text-slate-300 hover:border-slate-500"
+                  >
+                    Check now
+                  </button>
+                )}
+              </div>
             )}
           </div>
         ))}
-        {busy && (
-          <div className="mr-4 rounded-2xl rounded-bl-md border border-slate-800 bg-slate-900 px-4 py-3">
-            <p className="animate-pulse text-sm text-slate-400">
-              Thinking — may check your tasks or notes, usually 10–40s…
-            </p>
-          </div>
-        )}
         <div ref={bottomRef} />
       </div>
 
@@ -129,7 +159,7 @@ export default function Chat() {
         />
         <button
           onClick={() => void handleSend()}
-          disabled={busy || !draft.trim()}
+          disabled={sending || !draft.trim()}
           className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
         >
           Send
