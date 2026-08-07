@@ -215,22 +215,22 @@ describe('formatDayLabel', () => {
     expect(formatDayLabel(same, now)).toBe('Today');
   });
 
-  it('returns "Tomorrow" for the next IST day', () => {
+  it('returns "Tmr" for the next IST day', () => {
     const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
     const next = new Date(Date.UTC(2026, 4, 8, 9, 30, 0));
-    expect(formatDayLabel(next, now)).toBe('Tomorrow');
+    expect(formatDayLabel(next, now)).toBe('Tmr');
   });
 
-  it('returns "Yesterday" for the prior IST day', () => {
+  it('returns "Yest" for the prior IST day', () => {
     const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
     const prior = new Date(Date.UTC(2026, 4, 6, 9, 30, 0));
-    expect(formatDayLabel(prior, now)).toBe('Yesterday');
+    expect(formatDayLabel(prior, now)).toBe('Yest');
   });
 
-  it('falls back to "MMM D" for further-out dates', () => {
+  it('falls back to the bare day number for further-out dates', () => {
     const now = new Date(Date.UTC(2026, 4, 7, 9, 30, 0));
     const far = new Date(Date.UTC(2026, 4, 12, 9, 30, 0));
-    expect(formatDayLabel(far, now)).toBe('May 12');
+    expect(formatDayLabel(far, now)).toBe('12');
   });
 });
 
