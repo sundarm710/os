@@ -22,9 +22,9 @@ describe('postJson', () => {
     await expect(postJson('', { a: 1 })).rejects.toThrow(/URL is empty/);
   });
 
-  it('throws when VITE_AUTH_TOKEN is missing', async () => {
+  it('throws when the auth token is missing', async () => {
     vi.stubEnv('VITE_AUTH_TOKEN', '');
-    await expect(postJson(URL, { a: 1 })).rejects.toThrow(/VITE_AUTH_TOKEN/);
+    await expect(postJson(URL, { a: 1 })).rejects.toThrow(/auth token/i);
   });
 
   it('sends JSON body with auth header on success', async () => {

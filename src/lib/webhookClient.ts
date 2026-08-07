@@ -1,6 +1,8 @@
 // Generic webhook POST. Knows about auth + JSON, knows nothing about flows.
 // All flow-specific clients (postJournal, postCalendar) compose this.
 
+import { getAuthToken, clearAuthToken, notifyAuthInvalid } from './auth';
+
 // Hard cap on every webhook request. Without this, a hung n8n branch or an
 // iOS-suspended fetch can leave useTasks/useCalendarEvents stuck on
 // loading=true forever — the "Refreshing…" indicator never clears because
@@ -19,8 +21,9 @@ export class WebhookError extends Error {
 }
 
 function readAuthToken(): string {
-  // Read at call time (not module load) so tests can stub via vi.stubEnv.
-  return import.meta.env.VITE_AUTH_TOKEN ?? '';
+  // Read at call time (not module load): the token comes from the LoginGate
+  // (localStorage) with a dev/test env fallback. See lib/auth.ts.
+  return getAuthToken();
 }
 
 export async function postJson<TPayload>(
@@ -32,7 +35,7 @@ export async function postJson<TPayload>(
   // Claude Sonnet call that routinely runs 20–40s) pass `timeoutMs` explicitly.
   if (!url) throw new Error('Webhook URL is empty — check VITE_WEBHOOK_* env vars');
   const token = readAuthToken();
-  if (!token) throw new Error('Missing VITE_AUTH_TOKEN');
+  if (!token) throw new Error('Missing auth token — log in again');
 
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
@@ -51,6 +54,13 @@ export async function postJson<TPayload>(
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
+      // A rejected token means the stored value is wrong/stale — drop it and
+      // signal LoginGate so the user is prompted to re-enter, rather than
+      // letting every page silently fail with the same bad token.
+      if (res.status === 401 || res.status === 403) {
+        clearAuthToken();
+        notifyAuthInvalid();
+      }
       throw new WebhookError(res.status, body);
     }
     return res;
