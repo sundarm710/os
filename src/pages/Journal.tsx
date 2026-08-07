@@ -126,6 +126,9 @@ export default function Journal() {
 
   // When set, submit() upserts that journal_logs row instead of inserting new.
   const [editing, setEditing] = useState<JournalLog | null>(null);
+  // Inbox mode: capture goes to vault 800 Inbox/ for weekly triage instead of
+  // the daily note. Mood is ignored server-side for inbox rows.
+  const [inboxMode, setInboxMode] = useState(false);
 
   const [category, setCategory] = useState<LogCategory>('all');
 
@@ -192,6 +195,7 @@ export default function Journal() {
       await submit(() => ({
         client_timestamp: ts,
         text: composed,
+        ...(inboxMode ? { type: 'inbox' as const } : {}),
       }));
       writeString('journalLastLoggedAt', ts);
       setLastLoggedAt(ts);
@@ -199,6 +203,7 @@ export default function Journal() {
     setText('');
     setRating(null);
     setEditing(null);
+    setInboxMode(false);
     setPlaceholder(pickPlaceholder());
     void loadLogs();
   }
@@ -323,8 +328,21 @@ export default function Journal() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-slate-500">
-            {editing ? 'Editing entry' : 'Bullet Journal'}
+            {editing ? 'Editing entry' : inboxMode ? 'Inbox capture' : 'Bullet Journal'}
           </span>
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setInboxMode((v) => !v)}
+              className={`rounded-full border px-3 py-0.5 text-xs transition-colors ${
+                inboxMode
+                  ? 'border-amber-400 bg-amber-400/10 text-amber-300'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500'
+              }`}
+            >
+              📥 Inbox
+            </button>
+          )}
           {editing && (
             <div className="flex items-center gap-2 text-xs text-amber-300">
               <span>{formatLogTimestamp(editing)}</span>

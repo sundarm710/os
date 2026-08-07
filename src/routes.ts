@@ -1,11 +1,12 @@
 // Single source of truth for the app's pages. When a third page lands
 // (history? settings?), introduce react-router instead of extending this.
 
-export type Page = 'tasks' | 'journal' | 'daily-note' | 'calendar' | 'workouts' | 'learn' | 'people' | 'notes';
+export type Page = 'chat' | 'tasks' | 'journal' | 'daily-note' | 'calendar' | 'workouts' | 'learn' | 'people' | 'notes';
 
 // Ordered tab metadata — drives both the TabBar (left→right) and the
 // Shift+1…Shift+N keyboard shortcuts in App, so the two never diverge.
 export const TABS: { id: Page; label: string; icon: string }[] = [
+  { id: 'chat', label: 'Chat', icon: '✨' },
   { id: 'tasks', label: 'Tasks', icon: '📋' },
   { id: 'journal', label: 'Journal', icon: '📓' },
   { id: 'daily-note', label: 'Daily', icon: '📔' },
@@ -18,4 +19,4 @@ export const TABS: { id: Page; label: string; icon: string }[] = [
 
 export const PAGES: Page[] = TABS.map((t) => t.id);
 
-export const DEFAULT_PAGE: Page = 'journal';
+export const DEFAULT_PAGE: Page = 'chat';

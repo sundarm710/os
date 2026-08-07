@@ -11,6 +11,8 @@ export type JournalPayload = {
   client_id: string;
   client_timestamp: string;
   text: string;
+  // 'inbox' routes the capture to vault 800 Inbox/ instead of the daily note.
+  type?: 'inbox';
 };
 
 export type CalendarPayload = {

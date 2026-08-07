@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDrainQueue } from './lib/useDrainQueue';
 import { useIsKeyboardDevice } from './lib/usePlatform';
 import { DEFAULT_PAGE, PAGES, type Page } from './routes';
+import Chat from './pages/Chat';
 import Tasks from './pages/Tasks';
 import Journal from './pages/Journal';
 import DailyNote from './pages/DailyNote';
@@ -26,7 +27,7 @@ export default function App() {
     if (!isKeyboard) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
-      const m = /^Digit([1-8])$/.exec(e.code);
+      const m = /^Digit([1-9])$/.exec(e.code);
       if (!m) return;
       const el = document.activeElement as HTMLElement | null;
       if (
@@ -51,6 +52,7 @@ export default function App() {
   return (
     <LoginGate>
       <main className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-24 pt-12">
+        {page === 'chat' && <Chat />}
         {page === 'tasks' && <Tasks onNavigate={setPage} />}
         {page === 'journal' && <Journal />}
         {page === 'daily-note' && <DailyNote />}
