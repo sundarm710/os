@@ -265,6 +265,7 @@ type TaskActionRequest =
   | { action: 'status'; id: string; status: TaskStatus }
   | { action: 'due'; id: string; date: string | null }
   | { action: 'schedule'; id: string; date: string; time: string }
+  | { action: 'move'; id: string; project: string }
   | {
       action: 'add';
       text: string;
@@ -306,6 +307,71 @@ export async function fetchProjects(): Promise<string[]> {
   return data.projects ?? [];
 }
 
+/**
+ * Create a new project note (450 Projects/<name>.md) so tasks can be filed
+ * against it. Returns the canonical project name the server settled on.
+ * Throws with the server's message — notably "already exists" (409), which
+ * callers may choose to treat as success.
+ */
+export async function createProject(name: string): Promise<string> {
+  const res = await postJson(TASKS_URL, { action: 'create_project', name });
+  const data = (await res.json()) as
+    | { ok: true; project: string }
+    | { ok: false; error: string };
+  if (!data.ok) throw new Error(data.error);
+  return data.project;
+}
+
+/** The catch-all project. Never renameable or deletable. */
+export const UNCATEGORIZED = 'Uncategorized';
+
+export type ProjectStat = {
+  name: string;
+  open: number;
+  in_progress: number;
+  done: number; // completed in the last 30 days
+  is_default: boolean;
+};
+
+export async function fetchProjectStats(): Promise<ProjectStat[]> {
+  const res = await postJson(TASKS_URL, { action: 'project_stats' });
+  const data = (await res.json()) as
+    | { ok: true; projects: ProjectStat[] }
+    | { ok: false; error: string };
+  if (!('ok' in data) || !data.ok) {
+    throw new Error(('error' in data && data.error) || 'project stats failed');
+  }
+  return data.projects ?? [];
+}
+
+/**
+ * Rename a project. The backend moves the note and rewrites every wikilink
+ * pointing at it, so tasks keep their ids and attribution.
+ */
+export async function renameProject(from: string, to: string): Promise<string> {
+  const res = await postJson(TASKS_URL, { action: 'rename_project', from, to });
+  const data = (await res.json()) as
+    | { ok: true; project: string }
+    | { ok: false; error: string };
+  if (!data.ok) throw new Error(data.error);
+  return data.project;
+}
+
+export type DeleteProjectResult = { moved: number; archivedTo: string };
+
+/**
+ * Delete a project: its tasks are reassigned to Uncategorized and the note is
+ * archived under 450 Projects/_archive/ rather than destroyed.
+ */
+export async function deleteProject(name: string): Promise<DeleteProjectResult> {
+  const res = await postJson(TASKS_URL, { action: 'delete_project', name });
+  const data = (await res.json()) as
+    | { ok: true; moved: number; archived_to: string }
+    | { ok: false; error: string };
+  if (!data.ok) throw new Error(data.error);
+  return { moved: data.moved, archivedTo: data.archived_to };
+}
+
 // ─── People ──────────────────────────────────────────────────────────────────
 
 export type ContactStatus = 'active' | 'no_contact';
@@ -318,6 +384,7 @@ export type PersonSummary = {
   preview: string | null;
   snoozeUntil: string | null;
   contactStatus: ContactStatus;
+  mtimeMs: number; // epoch ms of the note's last modification
 };
 
 export type PersonSearchResult = {
@@ -394,6 +461,7 @@ export type NoteBacklink = {
   title: string;
   path: string;
   excerpt: string;
+  mtime: number; // epoch ms of the linking note's last modification
 };
 
 export type NoteDetail = {

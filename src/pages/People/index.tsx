@@ -192,6 +192,10 @@ export default function People() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<{ filePath: string; name: string } | null>(null);
 
+  // Inline filter over the tracked people list (distinct from the "+" full-vault
+  // search sheet). Selecting a match stamps last-contacted to the note's mtime.
+  const [filterQuery, setFilterQuery] = useState('');
+
   const today = kolkataDateString(new Date());
 
   async function load() {
@@ -253,6 +257,32 @@ export default function People() {
     await load();
   }
 
+  // Selecting a person from the inline search auto-stamps last-contacted to the
+  // note's last-modified time, then opens their detail.
+  async function handleFilterSelect(p: PersonSummary) {
+    if (p.mtimeMs) {
+      const modifiedDate = kolkataDateString(new Date(p.mtimeMs));
+      if (modifiedDate && modifiedDate !== p.lastContacted) {
+        try {
+          await savePerson(p.filePath, modifiedDate, '', {});
+        } catch {
+          // Non-fatal — still open the detail even if the stamp write failed.
+        }
+      }
+    }
+    openDetail(p.filePath, p.name);
+    void load();
+  }
+
+  const trimmedFilter = filterQuery.trim().toLowerCase();
+  const filtered = trimmedFilter
+    ? people.filter(
+        (p) =>
+          p.name.toLowerCase().includes(trimmedFilter) ||
+          (p.preview?.toLowerCase().includes(trimmedFilter) ?? false),
+      )
+    : null;
+
   // Partition people into groups
   const active = people.filter(
     (p) => p.contactStatus !== 'no_contact' && !(p.snoozeUntil && p.snoozeUntil >= today),
@@ -262,14 +292,14 @@ export default function People() {
   );
   const noContact = people.filter((p) => p.contactStatus === 'no_contact');
 
-  function PersonCard({ p }: { p: PersonSummary }) {
+  function PersonCard({ p, onOpen }: { p: PersonSummary; onOpen?: (p: PersonSummary) => void }) {
     const isSnoozed = p.snoozeUntil && p.snoozeUntil >= today;
     return (
       <li>
         <div className="flex items-stretch gap-2">
           <button
             type="button"
-            onClick={() => openDetail(p.filePath, p.name)}
+            onClick={() => (onOpen ? onOpen(p) : openDetail(p.filePath, p.name))}
             className="flex-1 rounded-xl border border-slate-800 bg-slate-900 p-4 text-left transition hover:border-slate-700 active:scale-[0.99]"
           >
             <div className="mb-1 flex items-center justify-between gap-2">
@@ -308,6 +338,16 @@ export default function People() {
           }
         />
 
+        {!loading && !error && people.length > 0 && (
+          <input
+            type="text"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            placeholder="Search people…"
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          />
+        )}
+
         {loading && <p className="text-xs text-slate-500">Loading…</p>}
         {error && <p className="text-xs text-rose-400">{error}</p>}
 
@@ -318,27 +358,41 @@ export default function People() {
           </p>
         )}
 
-        {active.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {active.map((p) => <PersonCard key={p.filePath} p={p} />)}
-          </ul>
-        )}
-
-        {snoozed.length > 0 && (
-          <>
-            <SectionHeader label={`Snoozed · ${snoozed.length}`} />
+        {filtered !== null ? (
+          filtered.length > 0 ? (
             <ul className="flex flex-col gap-2">
-              {snoozed.map((p) => <PersonCard key={p.filePath} p={p} />)}
+              {filtered.map((p) => (
+                <PersonCard key={p.filePath} p={p} onOpen={handleFilterSelect} />
+              ))}
             </ul>
-          </>
-        )}
-
-        {noContact.length > 0 && (
+          ) : (
+            <p className="text-xs text-slate-500">No people match “{filterQuery.trim()}”.</p>
+          )
+        ) : (
           <>
-            <SectionHeader label={`No contact · ${noContact.length}`} />
-            <ul className="flex flex-col gap-2 opacity-50">
-              {noContact.map((p) => <PersonCard key={p.filePath} p={p} />)}
-            </ul>
+            {active.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {active.map((p) => <PersonCard key={p.filePath} p={p} />)}
+              </ul>
+            )}
+
+            {snoozed.length > 0 && (
+              <>
+                <SectionHeader label={`Snoozed · ${snoozed.length}`} />
+                <ul className="flex flex-col gap-2">
+                  {snoozed.map((p) => <PersonCard key={p.filePath} p={p} />)}
+                </ul>
+              </>
+            )}
+
+            {noContact.length > 0 && (
+              <>
+                <SectionHeader label={`No contact · ${noContact.length}`} />
+                <ul className="flex flex-col gap-2 opacity-50">
+                  {noContact.map((p) => <PersonCard key={p.filePath} p={p} />)}
+                </ul>
+              </>
+            )}
           </>
         )}
       </section>

@@ -9,6 +9,8 @@ interface Props {
   defaultProject?: string | null;
   onClose: () => void;
   onAdd: (params: AddTaskParams) => Promise<void>;
+  /** Create a project note before the add; resolves to its canonical name. */
+  onCreateProject: (name: string) => Promise<string>;
 }
 
 export function AddTaskSheet({
@@ -17,6 +19,7 @@ export function AddTaskSheet({
   defaultProject,
   onClose,
   onAdd,
+  onCreateProject,
 }: Props) {
   const [text, setText] = useState<string>('');
   const [project, setProject] = useState<string | null>(null);
@@ -26,6 +29,8 @@ export function AddTaskSheet({
   const [recur, setRecur] = useState<string | null>(null);
   const [est, setEst] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [creatingProject, setCreatingProject] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset state every time the sheet opens so a stale draft doesn't leak.
   useEffect(() => {
@@ -38,6 +43,8 @@ export function AddTaskSheet({
       setRecur(null);
       setEst('');
       setSubmitting(false);
+      setCreatingProject(false);
+      setError(null);
     }
   }, [open, defaultProject]);
 
@@ -52,23 +59,57 @@ export function AddTaskSheet({
   const tomorrow = shiftKolkataDate(now, 1);
   const oneWeek = shiftKolkataDate(now, 7);
 
+  // Create the typed project as its own step. Creating a project is a real
+  // action with its own outcome, so it gets its own button rather than riding
+  // along on the task submit — otherwise there's nothing to press when you only
+  // want the project, since `canSubmit` requires task text.
+  async function handleCreateProject() {
+    const name = newProject.trim();
+    if (!name || creatingProject) return;
+    setCreatingProject(true);
+    setError(null);
+    haptic('submitStart');
+    try {
+      const created = await onCreateProject(name);
+      haptic('successRamp');
+      // Collapse back to the chip row with the new project pre-selected, so it
+      // reads the same as picking an existing one.
+      setProject(created);
+      setShowNewProject(false);
+      setNewProject('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreatingProject(false);
+    }
+  }
+
   async function handleSubmit() {
     if (!canSubmit) return;
     setSubmitting(true);
+    setError(null);
     haptic('submitStart');
     try {
+      // Fallback for typing a name and hitting "Add task" without pressing
+      // Create — the project note has to exist before the add, or the server
+      // bounces it with "Project not found".
+      let resolvedProject = finalProject;
+      if (showNewProject && resolvedProject) {
+        resolvedProject = await onCreateProject(resolvedProject);
+      }
       await onAdd({
         text: trimmedText,
-        ...(finalProject ? { project: finalProject } : {}),
+        ...(resolvedProject ? { project: resolvedProject } : {}),
         ...(due !== null ? { due } : {}),
         ...(est.trim() ? { est: est.trim() } : {}),
         ...(recur ? { recur } : {}),
       });
       haptic('successRamp');
       onClose();
-    } catch {
-      // Error is surfaced in the page banner via useTasks. Keep the sheet
-      // open so the user can retry or edit.
+    } catch (e) {
+      // Surface it here: useTasks re-throws creation failures without setting
+      // the page banner, so the sheet is the only place this can be seen.
+      setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
     }
   }
@@ -123,15 +164,34 @@ export function AddTaskSheet({
                 type="text"
                 value={newProject}
                 onChange={(e) => setNewProject(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter here creates the project — it must not fall through
+                  // to the task submit, which would be disabled anyway.
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateProject();
+                  }
+                }}
                 placeholder="New project name"
+                maxLength={60}
+                enterKeyHint="done"
                 autoFocus
                 className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
               />
               <button
                 type="button"
+                disabled={creatingProject || !newProject.trim()}
+                onClick={() => void handleCreateProject()}
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-emerald-50 transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              >
+                {creatingProject ? '…' : 'Create'}
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setShowNewProject(false);
                   setNewProject('');
+                  setError(null);
                 }}
                 className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300 transition active:scale-95 hover:border-slate-700"
               >
@@ -246,6 +306,12 @@ export function AddTaskSheet({
             className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
           />
         </div>
+
+        {error && (
+          <p className="mt-4 rounded-lg border border-rose-700/50 bg-rose-900/20 px-3 py-2 text-xs text-rose-300">
+            {error}
+          </p>
+        )}
 
         <button
           type="button"

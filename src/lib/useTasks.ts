@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   computeCategory,
+  createProject as createProjectApi,
   fetchDoneTasks,
   fetchOpenTasks,
   fetchProjects,
@@ -193,6 +194,17 @@ export function useTasks() {
   // Lazy projects fetch — triggered the first time the FAB opens. Cached
   // session-level; the projects list rarely changes mid-session, and a
   // refresh on next visit is cheap.
+  // Force a re-fetch, bypassing the session cache. Renaming or deleting a
+  // project invalidates the cached names, and the stale list would otherwise
+  // keep offering a project that no longer exists.
+  const refreshProjects = useCallback(async () => {
+    try {
+      setProjects(await fetchProjects());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   const loadProjects = useCallback(async () => {
     if (projects !== null) return;
     try {
@@ -205,11 +217,63 @@ export function useTasks() {
     }
   }, [projects]);
 
+  // Create a project note so tasks can be filed against it. The server rejects
+  // a name that already exists; we treat that as success since the caller's
+  // intent ("make sure this project exists") is already satisfied. Returns the
+  // canonical name to use for the follow-up add/move.
+  const createProject = useCallback(async (name: string): Promise<string> => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Project name is required');
+    try {
+      await createProjectApi(trimmed);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/already exists/i.test(msg)) throw e;
+    }
+    setProjects((prev) =>
+      prev && !prev.includes(trimmed) ? [...prev, trimmed].sort() : prev,
+    );
+    setError(null);
+    return trimmed;
+  }, []);
+
+  // Reassign a task to another project. The backend moves the task line
+  // between Obsidian project notes and rewrites its wikilink; the id, due date
+  // and recurrence rule all survive the move. Optimistic like reschedule():
+  // swap project in place, then replace with the server's task or revert.
+  const moveToProject = useCallback(
+    async (id: string | null, project: string) => {
+      if (!id) { setError('Task has no ID — open the vault to add one'); return; }
+      const snapshot = open.find((t) => t.id === id);
+      if (!snapshot || snapshot.project === project) return;
+
+      setOpen((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, project } : t)),
+      );
+
+      try {
+        const updated = await postTaskAction({ action: 'move', id, project });
+        setOpen((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        setError(null);
+      } catch (e) {
+        setOpen((prev) => prev.map((t) => (t.id === id ? snapshot : t)));
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [open],
+  );
+
   // Add a new task. Server assigns id + computes category, so we don't
   // optimistically insert — we wait for the server response and prepend the
   // canonical task to the open list. Errors propagate so the sheet stays
   // open on failure.
   const addTask = useCallback(async (params: AddTaskParams) => {
+    // The omnibar's `#project` token falls back to the literal typed text when
+    // it matches nothing known, so a brand-new project has to be created before
+    // the add — otherwise the server rejects with "Project not found".
+    if (params.project && projects !== null && !projects.includes(params.project)) {
+      await createProject(params.project);
+    }
     const created = await postTaskAction({
       action: 'add',
       text: params.text,
@@ -227,7 +291,7 @@ export function useTasks() {
           : prev,
       );
     }
-  }, []);
+  }, [projects, createProject]);
 
   useEffect(() => {
     void refresh();
@@ -252,5 +316,8 @@ export function useTasks() {
     reschedule,
     addTask,
     loadProjects,
+    refreshProjects,
+    createProject,
+    moveToProject,
   };
 }

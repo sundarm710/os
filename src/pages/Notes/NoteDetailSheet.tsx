@@ -7,6 +7,20 @@ interface Props {
   onClose: () => void;
 }
 
+// Compact "modified X ago" from an epoch-ms timestamp.
+function modifiedAgo(ms: number): string {
+  if (!ms) return '';
+  const diff = Date.now() - ms;
+  const day = 86_400_000;
+  if (diff < day) return 'today';
+  const days = Math.floor(diff / day);
+  if (days === 1) return '1 day ago';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} wk ago`;
+  if (days < 365) return `${Math.floor(days / 30)} mo ago`;
+  return `${Math.floor(days / 365)} yr ago`;
+}
+
 // Full-screen reader with an internal navigation stack: following a wikilink or
 // backlink pushes onto the stack; Back pops (or closes the sheet at the root).
 // A single popstate entry lets the Android/browser back gesture drive the same
@@ -167,7 +181,12 @@ export function NoteDetailSheet({ initialPath, onClose }: Props) {
                       onClick={() => navigate(b.path)}
                       className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-left transition hover:border-slate-700 active:scale-[0.99]"
                     >
-                      <span className="text-xs font-medium text-slate-200">{b.title}</span>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-200">{b.title}</span>
+                        {b.mtime > 0 && (
+                          <span className="flex-none text-[10px] text-slate-600">{modifiedAgo(b.mtime)}</span>
+                        )}
+                      </div>
                       {b.excerpt && (
                         <p className="mt-0.5 text-[11px] text-slate-500 line-clamp-2">{b.excerpt}</p>
                       )}

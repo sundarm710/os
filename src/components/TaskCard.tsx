@@ -8,25 +8,51 @@ interface Props {
   task: Task;
   muted?: boolean;
   hideProject?: boolean;
+  /** Keyboard cursor is on this card (desktop) — draws a highlight ring. */
+  selected?: boolean;
   onComplete?: (id: string | null) => void;
   onReopen?: (id: string | null) => void;
   onReschedule?: (id: string | null) => void;
   /** Long-press the card body, or tap the scheduled-time badge, to fire. */
   onSchedule?: (task: Task) => void;
+  /** Tap the project chip to reassign the task to another project. */
+  onReassign?: (task: Task) => void;
 }
 
 export function TaskCard({
   task,
   muted,
   hideProject,
+  selected,
   onComplete,
   onReopen,
   onReschedule,
   onSchedule,
+  onReassign,
 }: Props) {
   const meta: ReactNode[] = [];
 
-  if (!hideProject && task.project) {
+  // The project chip is the reassign affordance, mirroring how the due chip
+  // opens the date sheet. In by-project mode the project name is already the
+  // section header, so the chip collapses to a bare "move" glyph rather than
+  // repeating it on every row.
+  if (!muted && onReassign) {
+    meta.push(
+      <button
+        key="project"
+        type="button"
+        aria-label={`Move ${task.text} to another project`}
+        onPointerDown={stopPointerPropagation}
+        onClick={() => {
+          haptic('tap');
+          onReassign(task);
+        }}
+        className="border-b border-dashed border-slate-700 text-slate-400 transition hover:border-sky-400 hover:text-sky-200"
+      >
+        {hideProject || !task.project ? '🗂 move' : task.project}
+      </button>,
+    );
+  } else if (!hideProject && task.project) {
     meta.push(<span key="project">{task.project}</span>);
   }
   // The due chip itself is the reschedule affordance — tapping the date opens
@@ -112,8 +138,12 @@ export function TaskCard({
 
   return (
     <li
+      data-task-id={task.id ?? undefined}
       className={[
-        'rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2',
+        'rounded-lg border bg-slate-900/60 px-3 py-2 transition',
+        selected
+          ? 'border-emerald-400 ring-1 ring-emerald-400/60'
+          : 'border-slate-800',
         muted ? 'opacity-60' : '',
       ].join(' ')}
     >
