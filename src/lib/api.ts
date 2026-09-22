@@ -3,6 +3,7 @@
 
 import { kolkataDateString, shiftKolkataDate } from './time';
 import { postJson } from './webhookClient';
+import { readString, writeString } from './storage';
 
 // The PWA composes the full thought_log body (including any "[mood: N]"
 // prefix) and hands it to n8n as a single string. n8n only prepends the
@@ -77,6 +78,8 @@ const CALENDAR_FETCH_URL = import.meta.env.VITE_WEBHOOK_CALENDAR_FETCH_URL;
 const TASKS_URL = import.meta.env.VITE_WEBHOOK_TASKS_URL;
 const WORKOUTS_FETCH_URL = import.meta.env.VITE_WEBHOOK_WORKOUTS_FETCH_URL;
 const NOTES_URL = import.meta.env.VITE_WEBHOOK_NOTES_URL;
+const PARTNER_TASKS_URL = import.meta.env.VITE_WEBHOOK_PARTNER_TASKS_URL;
+const PARTNER_CHECKLIST_URL = import.meta.env.VITE_WEBHOOK_PARTNER_CHECKLIST_URL;
 
 export type WorkoutSessionType = 'strength' | 'cardio';
 export type WorkoutFetchType = WorkoutSessionType | 'all';
@@ -491,4 +494,193 @@ export async function fetchNote(path: string): Promise<NoteDetail> {
   }
   const { ...note } = data;
   return note as NoteDetail;
+}
+
+// ─── Partner (shared tasks + end-of-day checklist) ────────────────────────────
+// Identity is server-resolved from which of two static tokens was presented
+// (see lib/auth.ts / LoginGate) — the client never asserts who it is.
+
+export type PartnerPerson = 'sundar' | 'partner';
+
+export type PartnerTask = {
+  id: string;
+  client_id: string;
+  text: string;
+  assignee: PartnerPerson | null; // null = either/shared
+  created_by: PartnerPerson;
+  status: 'open' | 'done';
+  completed_by: PartnerPerson | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+type PartnerTasksResponse =
+  | { ok: true; you: PartnerPerson; tasks: PartnerTask[] }
+  | { ok: false; error: string };
+
+type PartnerTaskResponse =
+  | { ok: true; task: PartnerTask }
+  | { ok: false; error: string };
+
+export async function fetchPartnerTasks(): Promise<PartnerTask[]> {
+  const res = await postJson(PARTNER_TASKS_URL, { action: 'list' });
+  const data = (await res.json()) as PartnerTasksResponse;
+  if (!data.ok) throw new Error(data.error);
+  writeString('partnerYou', data.you);
+  return data.tasks;
+}
+
+export async function fetchPartnerDoneTasks(limit?: number): Promise<PartnerTask[]> {
+  const res = await postJson(PARTNER_TASKS_URL, { action: 'list_done', ...(limit ? { limit } : {}) });
+  const data = (await res.json()) as PartnerTasksResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.tasks;
+}
+
+export type AddPartnerTaskParams = {
+  client_id: string;
+  text: string;
+  assignee?: PartnerPerson | null;
+};
+
+export async function addPartnerTask(params: AddPartnerTaskParams): Promise<PartnerTask> {
+  const res = await postJson(PARTNER_TASKS_URL, { action: 'add', ...params });
+  const data = (await res.json()) as PartnerTaskResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.task;
+}
+
+export async function completePartnerTask(id: string): Promise<PartnerTask> {
+  const res = await postJson(PARTNER_TASKS_URL, { action: 'complete', id });
+  const data = (await res.json()) as PartnerTaskResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.task;
+}
+
+export async function reopenPartnerTask(id: string): Promise<PartnerTask> {
+  const res = await postJson(PARTNER_TASKS_URL, { action: 'reopen', id });
+  const data = (await res.json()) as PartnerTaskResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.task;
+}
+
+export type ChecklistItemType = 'boolean' | 'text';
+export type ChecklistAudience = 'self' | 'partner_note';
+
+export type PartnerChecklistItem = {
+  id: string;
+  item_key: string;
+  label: string;
+  item_type: ChecklistItemType;
+  audience: ChecklistAudience;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+};
+
+type ChecklistItemsResponse =
+  | { ok: true; you: PartnerPerson; items: PartnerChecklistItem[] }
+  | { ok: false; error: string };
+
+type ChecklistItemResponse =
+  | { ok: true; item: PartnerChecklistItem }
+  | { ok: false; error: string };
+
+// Identity is server-resolved (see the module comment above) — this is the
+// one place the client learns and caches "who am I" for display purposes
+// only (grouping/coloring). It is never sent back to the server as a claim.
+export function getCachedPerson(): PartnerPerson | null {
+  const v = readString('partnerYou');
+  return v === 'sundar' || v === 'partner' ? v : null;
+}
+
+export async function fetchChecklistItems(includeInactive = false): Promise<PartnerChecklistItem[]> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, {
+    action: 'list_items',
+    ...(includeInactive ? { include_inactive: true } : {}),
+  });
+  const data = (await res.json()) as ChecklistItemsResponse;
+  if (!data.ok) throw new Error(data.error);
+  writeString('partnerYou', data.you);
+  return data.items;
+}
+
+export async function addChecklistItem(
+  label: string,
+  itemType: ChecklistItemType,
+  audience: ChecklistAudience = 'self',
+): Promise<PartnerChecklistItem> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, {
+    action: 'add_item',
+    label,
+    item_type: itemType,
+    audience,
+  });
+  const data = (await res.json()) as ChecklistItemResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.item;
+}
+
+export async function editChecklistItem(
+  id: string,
+  updates: Partial<Pick<PartnerChecklistItem, 'label' | 'item_type' | 'audience'>>,
+): Promise<PartnerChecklistItem> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, { action: 'edit_item', id, ...updates });
+  const data = (await res.json()) as ChecklistItemResponse;
+  if (!data.ok) throw new Error(data.error);
+  return data.item;
+}
+
+export async function deactivateChecklistItem(id: string): Promise<void> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, { action: 'deactivate_item', id });
+  const data = (await res.json()) as { ok: boolean };
+  if (!data.ok) throw new Error('could not deactivate item');
+}
+
+export async function reorderChecklistItems(orderedIds: string[]): Promise<void> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, { action: 'reorder_items', ordered_ids: orderedIds });
+  const data = (await res.json()) as { ok: boolean };
+  if (!data.ok) throw new Error('could not reorder items');
+}
+
+export type ChecklistAnswer = {
+  item_id: string;
+  value_bool?: boolean;
+  value_text?: string;
+};
+
+export type ChecklistSubmitPayload = {
+  client_id: string;
+  entry_date: string; // YYYY-MM-DD
+  answers: ChecklistAnswer[];
+};
+
+export async function submitChecklist(payload: ChecklistSubmitPayload): Promise<void> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, { action: 'submit', ...payload });
+  const data = (await res.json()) as { ok: boolean; error?: string };
+  if (!data.ok) throw new Error(data.error || 'checklist submit failed');
+}
+
+export type ChecklistDayAnswer = { value_bool: boolean | null; value_text: string | null };
+
+export type ChecklistDayItem = {
+  id: string;
+  item_key: string;
+  label: string;
+  item_type: ChecklistItemType;
+  audience: ChecklistAudience;
+  sundar: ChecklistDayAnswer | null;
+  partner: ChecklistDayAnswer | null;
+};
+
+type ChecklistDayResponse =
+  | { ok: true; you: PartnerPerson; items: ChecklistDayItem[] }
+  | { ok: false; error: string };
+
+export async function fetchChecklistDay(entryDate: string): Promise<ChecklistDayItem[]> {
+  const res = await postJson(PARTNER_CHECKLIST_URL, { action: 'fetch_day', entry_date: entryDate });
+  const data = (await res.json()) as ChecklistDayResponse;
+  if (!data.ok) throw new Error(data.error);
+  writeString('partnerYou', data.you);
+  return data.items;
 }

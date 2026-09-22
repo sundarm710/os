@@ -12,6 +12,7 @@ import Workouts from './pages/Workouts';
 import Learn from './pages/Learn';
 import People from './pages/People';
 import Notes from './pages/Notes';
+import Partner from './pages/Partner';
 import { TabBar } from './components/TabBar';
 import { LoginGate } from './components/LoginGate';
 
@@ -63,6 +64,7 @@ export default function App() {
         {page === 'learn' && <Learn />}
         {page === 'people' && <People />}
         {page === 'notes' && <Notes />}
+        {page === 'partner' && <Partner />}
       </main>
       <TabBar active={page} onChange={setPage} showShortcuts={isKeyboard} />
     </LoginGate>

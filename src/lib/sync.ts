@@ -1,4 +1,13 @@
-import { postCalendar, postJournal, type CalendarPayload, type JournalPayload } from './api';
+import {
+  postCalendar,
+  postJournal,
+  addPartnerTask,
+  submitChecklist,
+  type CalendarPayload,
+  type JournalPayload,
+  type AddPartnerTaskParams,
+  type ChecklistSubmitPayload,
+} from './api';
 import {
   getPending,
   incrementAttempts,
@@ -32,6 +41,10 @@ const dispatchers: {
 } = {
   journal: (payload) => postJournal(payload as unknown as JournalPayload),
   calendar: (payload) => postCalendar(payload as unknown as CalendarPayload),
+  'partner-task': (payload) =>
+    addPartnerTask(payload as unknown as AddPartnerTaskParams).then(() => undefined),
+  'partner-checklist': (payload) =>
+    submitChecklist(payload as unknown as ChecklistSubmitPayload),
 };
 
 async function dispatch(entry: QueuedEntry): Promise<void> {

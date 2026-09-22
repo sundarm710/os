@@ -6,6 +6,7 @@ const KEYS = {
   calendarLastTitle: 'calendar:lastTitle',
   learnLastTopicSlug: 'learn:lastTopicSlug',
   authToken: 'auth:token',
+  partnerYou: 'partner:you',
 } as const;
 
 export type StorageKey = keyof typeof KEYS;

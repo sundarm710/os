@@ -4,9 +4,13 @@ import { clear } from 'idb-keyval';
 // Mock the api module so we can drive dispatcher outcomes deterministically.
 const postJournal = vi.fn();
 const postCalendar = vi.fn();
+const addPartnerTask = vi.fn();
+const submitChecklist = vi.fn();
 vi.mock('./api', () => ({
   postJournal: (...args: unknown[]) => postJournal(...args),
   postCalendar: (...args: unknown[]) => postCalendar(...args),
+  addPartnerTask: (...args: unknown[]) => addPartnerTask(...args),
+  submitChecklist: (...args: unknown[]) => submitChecklist(...args),
 }));
 
 import { drainQueue } from './sync';
@@ -17,6 +21,8 @@ describe('drainQueue', () => {
     await clear();
     postJournal.mockReset();
     postCalendar.mockReset();
+    addPartnerTask.mockReset();
+    submitChecklist.mockReset();
   });
 
   afterEach(async () => {
@@ -75,6 +81,20 @@ describe('drainQueue', () => {
     const [entry] = await getPending();
     expect(entry?.id).toBe(id);
     expect(entry?.attempts).toBe(2);
+  });
+
+  it('dispatches partner-task and partner-checklist entries', async () => {
+    addPartnerTask.mockResolvedValue({ id: '1' });
+    submitChecklist.mockResolvedValue(undefined);
+
+    await enqueue('partner-task', { client_id: newClientId(), text: 'water plants', assignee: null });
+    await enqueue('partner-checklist', { client_id: newClientId(), entry_date: '2026-09-22', answers: [] });
+
+    const out = await drainQueue();
+
+    expect(out).toEqual({ sent: 2, failed: 0 });
+    expect(addPartnerTask).toHaveBeenCalledTimes(1);
+    expect(submitChecklist).toHaveBeenCalledTimes(1);
   });
 
   it('processes oldest-first', async () => {

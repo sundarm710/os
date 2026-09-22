@@ -38,6 +38,13 @@ describe('queue', () => {
       const pending = await getPending();
       expect(pending.map((p) => p.type)).toEqual(['journal', 'calendar', 'journal']);
     });
+
+    it('accepts partner-task and partner-checklist entry types', async () => {
+      await enqueue('partner-task', { client_id: newClientId(), text: 'water plants', assignee: null });
+      await enqueue('partner-checklist', { client_id: newClientId(), entry_date: '2026-09-22', answers: [] });
+      const pending = await getPending();
+      expect(pending.map((p) => p.type)).toEqual(['partner-task', 'partner-checklist']);
+    });
   });
 
   describe('markDone', () => {
