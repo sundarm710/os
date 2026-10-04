@@ -19,6 +19,7 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ['j  k', 'move the cursor (tasks + headers)'],
       ['x', 'complete the selected task'],
+      ['-', 'cancel the selected task (also in replan)'],
       ['↵', 'complete task · or expand/collapse a header'],
       ['d', 'set due date'],
       ['s', 'schedule on the calendar'],

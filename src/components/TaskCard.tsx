@@ -17,6 +17,8 @@ interface Props {
   onSchedule?: (task: Task) => void;
   /** Tap the project chip to reassign the task to another project. */
   onReassign?: (task: Task) => void;
+  /** Tap the cancel chip to mark the task `- [-]` (native Obsidian cancelled). */
+  onCancel?: (id: string | null) => void;
 }
 
 export function TaskCard({
@@ -29,6 +31,7 @@ export function TaskCard({
   onReschedule,
   onSchedule,
   onReassign,
+  onCancel,
 }: Props) {
   const meta: ReactNode[] = [];
 
@@ -116,6 +119,27 @@ export function TaskCard({
         </span>,
       );
     }
+  }
+
+  // Cancel chip — last in the meta row so it's never the first thing a thumb
+  // hits. Native confirm guards the one-tap path; the keyboard `-` shortcut
+  // skips it since selecting + pressing is already deliberate.
+  if (!muted && onCancel) {
+    meta.push(
+      <button
+        key="cancel"
+        type="button"
+        aria-label={`Cancel ${task.text}`}
+        onPointerDown={stopPointerPropagation}
+        onClick={() => {
+          haptic('tap');
+          if (window.confirm(`Cancel "${task.text}"?`)) onCancel(task.id);
+        }}
+        className="border-b border-dashed border-slate-700 text-slate-500 transition hover:border-rose-400 hover:text-rose-300"
+      >
+        ✕ cancel
+      </button>,
+    );
   }
 
   const checkable = !muted && Boolean(onComplete);

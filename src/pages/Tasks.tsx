@@ -300,6 +300,13 @@ export default function Tasks({ onNavigate }: TasksProps) {
           void complete(taskId);
           setSelectedKey(null);
           break;
+        case '-':
+          if (!taskId) break;
+          e.preventDefault();
+          haptic('tap');
+          void cancel(taskId);
+          setSelectedKey(null);
+          break;
         case 'd':
           if (!taskId) break;
           e.preventDefault();
@@ -351,6 +358,7 @@ export default function Tasks({ onNavigate }: TasksProps) {
     replanCandidates,
     open,
     complete,
+    cancel,
   ]);
 
   function handleSchedule(task: Task) {
@@ -394,6 +402,7 @@ export default function Tasks({ onNavigate }: TasksProps) {
         tasks={replanQueue}
         keyboard={isKeyboard}
         onComplete={(id) => void complete(id)}
+        onCancel={(id) => void cancel(id)}
         onReschedule={(id, date) => void reschedule(id, date)}
         onExit={() => setReplanQueue(null)}
       />
@@ -485,6 +494,7 @@ export default function Tasks({ onNavigate }: TasksProps) {
             toggleCollapse(g.key);
           }}
           onComplete={complete}
+          onCancel={cancel}
           onReschedule={setReschedulingId}
           onSchedule={handleSchedule}
           onReassign={handleReassign}
@@ -661,6 +671,7 @@ function Section({
   onReschedule,
   onSchedule,
   onReassign,
+  onCancel,
 }: {
   label: string;
   toneClass: string;
@@ -679,6 +690,7 @@ function Section({
   onReschedule?: (id: string | null) => void;
   onSchedule?: (task: Task) => void;
   onReassign?: (task: Task) => void;
+  onCancel?: (id: string | null) => void;
 }) {
   const count = (
     <span className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -733,6 +745,7 @@ function Section({
               onReschedule={onReschedule}
               onSchedule={onSchedule}
               onReassign={onReassign}
+              onCancel={onCancel}
             />
           ))}
         </ul>

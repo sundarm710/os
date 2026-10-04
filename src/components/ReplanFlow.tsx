@@ -11,9 +11,10 @@ function parseISTDate(yyyyMmDd: string): Date {
 
 interface Props {
   tasks: Task[];
-  /** Desktop only — enable single-key triage (x/d/s/esc) + show key hints. */
+  /** Desktop only — enable single-key triage (x/-/d/s/esc) + show key hints. */
   keyboard?: boolean;
   onComplete: (id: string | null) => void;
+  onCancel: (id: string | null) => void;
   onReschedule: (id: string | null, date: string | null) => void;
   onExit: () => void;
 }
@@ -38,6 +39,7 @@ export function ReplanFlow({
   tasks,
   keyboard,
   onComplete,
+  onCancel,
   onReschedule,
   onExit,
 }: Props) {
@@ -74,7 +76,7 @@ export function ReplanFlow({
     : null;
 
   // Single-key triage. While the date sheet is open its own inputs own the
-  // keyboard (Esc closes it); otherwise x=done, d=reschedule, s/→/space=skip,
+  // keyboard (Esc closes it); otherwise x=done, -=cancel, d=reschedule, s/→/space=skip,
   // esc=exit. Harmless on touch, so it's only attached on keyboard devices.
   useEffect(() => {
     if (!keyboard) return;
@@ -111,6 +113,13 @@ export function ReplanFlow({
           onComplete(current.id);
           advance();
           break;
+        case '-':
+          if (!current) break;
+          e.preventDefault();
+          haptic('tap');
+          onCancel(current.id);
+          advance();
+          break;
         case 'd':
           if (!current) break;
           e.preventDefault();
@@ -133,7 +142,7 @@ export function ReplanFlow({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
     // `advance` closes over index/tasks.length; re-subscribe as those change.
-  }, [keyboard, datePickerOpen, current, index, tasks.length, onComplete, onExit]);
+  }, [keyboard, datePickerOpen, current, index, tasks.length, onComplete, onCancel, onExit]);
 
   if (!current) {
     return (
@@ -255,6 +264,17 @@ export function ReplanFlow({
             Reschedule
           </ActionButton>
           <ActionButton
+            tone="rose"
+            hint={keyboard ? '-' : undefined}
+            onClick={() => {
+              haptic('tap');
+              onCancel(current.id);
+              advance();
+            }}
+          >
+            ✕ Cancel task
+          </ActionButton>
+          <ActionButton
             tone="ghost"
             hint={keyboard ? 'S' : undefined}
             onClick={() => {
@@ -290,7 +310,7 @@ function ActionButton({
   onClick,
 }: {
   children: React.ReactNode;
-  tone: 'emerald' | 'slate' | 'ghost';
+  tone: 'emerald' | 'slate' | 'rose' | 'ghost';
   hint?: string;
   onClick: () => void;
 }) {
@@ -299,7 +319,9 @@ function ActionButton({
       ? 'bg-emerald-500 text-emerald-50 hover:bg-emerald-400'
       : tone === 'slate'
         ? 'border border-slate-700 bg-slate-900 text-slate-100 hover:border-slate-600'
-        : 'text-slate-400 hover:text-slate-200';
+        : tone === 'rose'
+          ? 'border border-rose-900/70 bg-slate-900 text-rose-300 hover:border-rose-700'
+          : 'text-slate-400 hover:text-slate-200';
   return (
     <button
       type="button"
