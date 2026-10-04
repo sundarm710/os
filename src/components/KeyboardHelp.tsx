@@ -18,10 +18,9 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
     title: 'List',
     rows: [
       ['j  k', 'move the cursor (tasks + headers)'],
-      ['x', 'complete the selected task'],
-      ['-', 'cancel the selected task (also in replan)'],
-      ['↵', 'complete task · or expand/collapse a header'],
-      ['d', 'set due date'],
+      ['x  ↵', 'done (↵ on a header expands/collapses it)'],
+      ['⇧X', 'cancel'],
+      ['d', 'reschedule (due date)'],
       ['s', 'schedule on the calendar'],
       ['m', 'move to another project'],
       ['g', 'manage projects (create / rename / delete)'],
@@ -30,6 +29,16 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ['⇧R', 'toggle routines'],
       ['⇧P', 'group by project'],
       ['esc', 'clear the cursor'],
+    ],
+  },
+  {
+    title: 'Replan',
+    rows: [
+      ['x  ↵', 'done'],
+      ['⇧X', 'cancel'],
+      ['d', 'reschedule (due date)'],
+      ['␣  →  j', 'skip'],
+      ['esc', 'exit replan'],
     ],
   },
   {
@@ -53,7 +62,7 @@ export function KeyboardHelp({ open, onClose }: Props) {
       <div
         role="dialog"
         aria-label="Keyboard shortcuts"
-        className="fixed left-1/2 top-1/2 z-50 w-[22rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-800 bg-slate-950 p-5"
+        className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[22rem] max-w-[calc(100vw-2rem)] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-800 bg-slate-950 p-5"
       >
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-100">

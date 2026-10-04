@@ -219,6 +219,19 @@ export default function Tasks({ onNavigate }: TasksProps) {
       scrollToKey(key);
     };
 
+    // After done/cancel, keep the cursor in place: land on the next task in
+    // line, or the previous one if this was the last.
+    const selectNextTask = (taskId: string) => {
+      const cur = navKeys.indexOf(`t:${taskId}`);
+      const isTask = (k: string) => k.startsWith('t:');
+      const nextKey =
+        navKeys.slice(cur + 1).find(isTask) ??
+        navKeys.slice(0, cur).reverse().find(isTask) ??
+        null;
+      setSelectedKey(nextKey);
+      if (nextKey) scrollToKey(nextKey);
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -246,11 +259,18 @@ export default function Tasks({ onNavigate }: TasksProps) {
       const taskId =
         selectedKey && selectedKey.startsWith('t:') ? selectedKey.slice(2) : null;
 
-      // Shift+letter chords (⇧R routines, ⇧P by-project, ⇧C collapse the
-      // selected row's group). Keyed off code so layout doesn't matter; other
-      // shift combos (⇧digit tab-switch) fall through to App's handler.
+      // Shift+letter chords (⇧X cancel, ⇧R routines, ⇧P by-project, ⇧C
+      // collapse the selected row's group). Keyed off code so layout doesn't
+      // matter; other shift combos (⇧digit tab-switch) fall through to App.
       if (e.shiftKey) {
-        if (e.code === 'KeyR') {
+        if (e.code === 'KeyX') {
+          if (taskId) {
+            e.preventDefault();
+            haptic('tap');
+            void cancel(taskId);
+            selectNextTask(taskId);
+          }
+        } else if (e.code === 'KeyR') {
           e.preventDefault();
           haptic('tap');
           setShowRoutines((v) => !v);
@@ -291,21 +311,14 @@ export default function Tasks({ onNavigate }: TasksProps) {
           } else if (taskId) {
             e.preventDefault();
             void complete(taskId);
-            setSelectedKey(null);
+            selectNextTask(taskId);
           }
           break;
         case 'x':
           if (!taskId) break;
           e.preventDefault();
           void complete(taskId);
-          setSelectedKey(null);
-          break;
-        case '-':
-          if (!taskId) break;
-          e.preventDefault();
-          haptic('tap');
-          void cancel(taskId);
-          setSelectedKey(null);
+          selectNextTask(taskId);
           break;
         case 'd':
           if (!taskId) break;

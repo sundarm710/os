@@ -122,7 +122,7 @@ export function TaskCard({
   }
 
   // Cancel chip — last in the meta row so it's never the first thing a thumb
-  // hits. Native confirm guards the one-tap path; the keyboard `-` shortcut
+  // hits. Native confirm guards the one-tap path; the keyboard ⇧X shortcut
   // skips it since selecting + pressing is already deliberate.
   if (!muted && onCancel) {
     meta.push(

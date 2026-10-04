@@ -11,7 +11,7 @@ function parseISTDate(yyyyMmDd: string): Date {
 
 interface Props {
   tasks: Task[];
-  /** Desktop only — enable single-key triage (x/-/d/s/esc) + show key hints. */
+  /** Desktop only — enable single-key triage (x/⇧X/d/space/esc) + show key hints. */
   keyboard?: boolean;
   onComplete: (id: string | null) => void;
   onCancel: (id: string | null) => void;
@@ -76,8 +76,8 @@ export function ReplanFlow({
     : null;
 
   // Single-key triage. While the date sheet is open its own inputs own the
-  // keyboard (Esc closes it); otherwise x=done, -=cancel, d=reschedule, s/→/space=skip,
-  // esc=exit. Harmless on touch, so it's only attached on keyboard devices.
+  // keyboard (Esc closes it); otherwise x/↵=done, ⇧X=cancel, d=reschedule,
+  // space/→/j=skip, esc=exit — same keys as the Tasks list. Harmless on touch, so it's only attached on keyboard devices.
   useEffect(() => {
     if (!keyboard) return;
 
@@ -105,19 +105,23 @@ export function ReplanFlow({
         return;
       }
 
+      // ⇧X = cancel. Keyed off code so it isn't confused with plain `x`.
+      if (e.shiftKey && e.code === 'KeyX') {
+        if (!current) return;
+        e.preventDefault();
+        haptic('tap');
+        onCancel(current.id);
+        advance();
+        return;
+      }
+
       switch (e.key) {
         case 'x':
+        case 'Enter':
           if (!current) break;
           e.preventDefault();
           haptic('tap');
           onComplete(current.id);
-          advance();
-          break;
-        case '-':
-          if (!current) break;
-          e.preventDefault();
-          haptic('tap');
-          onCancel(current.id);
           advance();
           break;
         case 'd':
@@ -125,9 +129,9 @@ export function ReplanFlow({
           e.preventDefault();
           openReschedule();
           break;
-        case 's':
-        case 'ArrowRight':
         case ' ':
+        case 'ArrowRight':
+        case 'j':
           e.preventDefault();
           haptic('tap');
           advance();
@@ -265,7 +269,7 @@ export function ReplanFlow({
           </ActionButton>
           <ActionButton
             tone="rose"
-            hint={keyboard ? '-' : undefined}
+            hint={keyboard ? '⇧X' : undefined}
             onClick={() => {
               haptic('tap');
               onCancel(current.id);
@@ -276,7 +280,7 @@ export function ReplanFlow({
           </ActionButton>
           <ActionButton
             tone="ghost"
-            hint={keyboard ? 'S' : undefined}
+            hint={keyboard ? '␣' : undefined}
             onClick={() => {
               haptic('tap');
               advance();
