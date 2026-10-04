@@ -77,7 +77,8 @@ export function ReplanFlow({
 
   // Single-key triage. While the date sheet is open its own inputs own the
   // keyboard (Esc closes it); otherwise x/↵=done, ⇧X=cancel, d=reschedule,
-  // space/→/j=skip, esc=exit — same keys as the Tasks list. Harmless on touch, so it's only attached on keyboard devices.
+  // space/→/j=skip, esc=exit — same keys as the Tasks list. Harmless on
+  // touch, so it's only attached on keyboard devices.
   useEffect(() => {
     if (!keyboard) return;
 

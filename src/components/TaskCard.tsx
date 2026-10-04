@@ -242,11 +242,33 @@ export function TaskCard({
               {meta}
             </div>
           )}
+          {/* Keyboard cursor is here — show the same key map as Replan. */}
+          {selected && !muted && (
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+              {CURSOR_KEYS.map(([k, label]) => (
+                <span key={k}>
+                  <kbd className="mr-1 rounded border border-slate-700 px-1 font-mono text-slate-400">
+                    {k}
+                  </kbd>
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </li>
   );
 }
+
+// Same order and keys as the ReplanFlow buttons.
+const CURSOR_KEYS: [string, string][] = [
+  ['X', 'done'],
+  ['D', 'reschedule'],
+  ['⇧X', 'cancel'],
+  ['S', 'calendar'],
+  ['M', 'move'],
+];
 
 // Stop a pointerdown from bubbling into the card body's long-press timer so
 // tapping a chip or the checkbox doesn't also queue a schedule.
