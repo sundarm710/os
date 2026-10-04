@@ -13,6 +13,7 @@ import { ProjectSheet } from '../components/ProjectSheet';
 import { ProjectsPanel } from '../components/ProjectsPanel';
 import { ReplanFlow } from '../components/ReplanFlow';
 import { TaskCard } from '../components/TaskCard';
+import { TypedDateBar } from '../components/TypedDateBar';
 import { TaskOmnibar, type OmnibarHandle } from '../components/TaskOmnibar';
 import { KeyboardHelp } from '../components/KeyboardHelp';
 
@@ -79,6 +80,8 @@ export default function Tasks({ onNavigate }: TasksProps) {
   const [showNoDate, setShowNoDate] = useState<boolean>(false);
   const [groupByProject, setGroupByProject] = useState<boolean>(false);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  // Keyboard reschedule opens the typed bar first; tab escalates to the sheet.
+  const [rescheduleMore, setRescheduleMore] = useState<boolean>(false);
   const [reassigningId, setReassigningId] = useState<string | null>(null);
   const [adding, setAdding] = useState<boolean>(false);
   const [replanQueue, setReplanQueue] = useState<Task[] | null>(null);
@@ -181,6 +184,39 @@ export default function Tasks({ onNavigate }: TasksProps) {
   const groupKeyOfTask = (id: string): string | null =>
     openGroups.find((g) => g.tasks.some((t) => t.id === id))?.key ?? null;
 
+  const scrollToKey = (key: string) => {
+    const sel = key.startsWith('t:')
+      ? `[data-task-id="${CSS.escape(key.slice(2))}"]`
+      : `[data-row-key="${CSS.escape(key)}"]`;
+    requestAnimationFrame(() => {
+      document.querySelector(sel)?.scrollIntoView({ block: 'nearest' });
+    });
+  };
+
+  // After done/cancel/reschedule, keep the cursor in place: land on the next task in
+  // line, or the previous one if this was the last.
+  const selectNextTask = (taskId: string) => {
+    const cur = navKeys.indexOf(`t:${taskId}`);
+    const isTask = (k: string) => k.startsWith('t:');
+    const nextKey =
+      navKeys.slice(cur + 1).find(isTask) ??
+      navKeys.slice(0, cur).reverse().find(isTask) ??
+      null;
+    setSelectedKey(nextKey);
+    if (nextKey) scrollToKey(nextKey);
+  };
+
+  // Only moves a cursor that's already on this task — mouse/touch actions
+  // without a cursor don't conjure one.
+  const advanceCursorFrom = (taskId: string | null) => {
+    if (taskId && selectedKey === `t:${taskId}`) selectNextTask(taskId);
+  };
+
+  const closeReschedule = () => {
+    setReschedulingId(null);
+    setRescheduleMore(false);
+  };
+
   useEffect(() => {
     if (!isKeyboard) return;
 
@@ -196,15 +232,6 @@ export default function Tasks({ onNavigate }: TasksProps) {
       );
     };
 
-    const scrollToKey = (key: string) => {
-      const sel = key.startsWith('t:')
-        ? `[data-task-id="${CSS.escape(key.slice(2))}"]`
-        : `[data-row-key="${CSS.escape(key)}"]`;
-      requestAnimationFrame(() => {
-        document.querySelector(sel)?.scrollIntoView({ block: 'nearest' });
-      });
-    };
-
     const moveSelection = (delta: number) => {
       if (navKeys.length === 0) return;
       const cur = selectedKey ? navKeys.indexOf(selectedKey) : -1;
@@ -217,19 +244,6 @@ export default function Tasks({ onNavigate }: TasksProps) {
       const key = navKeys[next];
       setSelectedKey(key);
       scrollToKey(key);
-    };
-
-    // After done/cancel, keep the cursor in place: land on the next task in
-    // line, or the previous one if this was the last.
-    const selectNextTask = (taskId: string) => {
-      const cur = navKeys.indexOf(`t:${taskId}`);
-      const isTask = (k: string) => k.startsWith('t:');
-      const nextKey =
-        navKeys.slice(cur + 1).find(isTask) ??
-        navKeys.slice(0, cur).reverse().find(isTask) ??
-        null;
-      setSelectedKey(nextKey);
-      if (nextKey) scrollToKey(nextKey);
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -250,7 +264,11 @@ export default function Tasks({ onNavigate }: TasksProps) {
 
       // A bottom sheet / replan view owns the screen — don't hijack its keys.
       if (adding || reschedulingId !== null || reassigningId !== null || replanQueue) {
-        if (e.key === 'Escape') setSelectedKey(null);
+        // Esc on the reschedule sheet closes it and keeps the cursor.
+        if (e.key === 'Escape') {
+          if (reschedulingId !== null) closeReschedule();
+          else setSelectedKey(null);
+        }
         return;
       }
 
@@ -506,8 +524,14 @@ export default function Tasks({ onNavigate }: TasksProps) {
             haptic('tap');
             toggleCollapse(g.key);
           }}
-          onComplete={complete}
-          onCancel={cancel}
+          onComplete={(id) => {
+            advanceCursorFrom(id);
+            void complete(id);
+          }}
+          onCancel={(id) => {
+            advanceCursorFrom(id);
+            void cancel(id);
+          }}
           onReschedule={setReschedulingId}
           onSchedule={handleSchedule}
           onReassign={handleReassign}
@@ -570,18 +594,49 @@ export default function Tasks({ onNavigate }: TasksProps) {
         </div>
       )}
 
+      {/* Keyboard: same typed box as Replan; tab escalates to the sheet. */}
+      {isKeyboard && reschedulingTask && !rescheduleMore && (
+        <>
+          <div
+            role="presentation"
+            onClick={closeReschedule}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          />
+          <div
+            role="dialog"
+            aria-label="Reschedule task"
+            className="fixed left-1/2 top-1/3 z-50 w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-slate-800 bg-slate-950 p-4"
+          >
+            <p className="mb-3 truncate text-sm text-slate-200">
+              {reschedulingTask.text}
+            </p>
+            <TypedDateBar
+              onPick={(date) => {
+                advanceCursorFrom(reschedulingId);
+                if (reschedulingId) void reschedule(reschedulingId, date);
+                closeReschedule();
+              }}
+              onClose={closeReschedule}
+              onMore={() => setRescheduleMore(true)}
+            />
+          </div>
+        </>
+      )}
+
       <DateSheet
-        open={reschedulingTask !== null}
+        open={reschedulingTask !== null && (!isKeyboard || rescheduleMore)}
         taskTitle={reschedulingTask?.text}
         currentDue={reschedulingTask?.due ?? null}
-        onClose={() => setReschedulingId(null)}
+        onClose={closeReschedule}
         onPick={(date) => {
+          advanceCursorFrom(reschedulingId);
           if (reschedulingId) void reschedule(reschedulingId, date);
-          setReschedulingId(null);
+          closeReschedule();
         }}
         onCancel={() => {
+          advanceCursorFrom(reschedulingId);
           if (reschedulingId) void cancel(reschedulingId);
-          setReschedulingId(null);
+          closeReschedule();
         }}
       />
 

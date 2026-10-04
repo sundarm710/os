@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react';
 import { type Task, type TaskCategory } from '../lib/api';
 import { haptic } from '../lib/haptic';
-import { resolveDueToken } from '../lib/taskInput';
-import { formatDayLabelLong } from '../lib/time';
 import { DateSheet } from './DateSheet';
-
-function parseISTDate(yyyyMmDd: string): Date {
-  return new Date(`${yyyyMmDd}T00:00:00+05:30`);
-}
+import { TypedDateBar } from './TypedDateBar';
 
 interface Props {
   tasks: Task[];
@@ -45,7 +40,8 @@ export function ReplanFlow({
 }: Props) {
   const [index, setIndex] = useState<number>(0);
   const [datePickerOpen, setDatePickerOpen] = useState<boolean>(false);
-  const [dateText, setDateText] = useState<string>('');
+  // Keyboard only: the full DateSheet, reached from the typed bar via tab.
+  const [moreOpen, setMoreOpen] = useState<boolean>(false);
   const current: Task | undefined = tasks[index];
 
   // On keyboard devices, "Reschedule" swaps the action buttons for an inline
@@ -53,13 +49,12 @@ export function ReplanFlow({
   const typedReschedule = Boolean(keyboard) && datePickerOpen;
 
   function openReschedule() {
-    setDateText('');
     setDatePickerOpen(true);
   }
 
   function closeReschedule() {
     setDatePickerOpen(false);
-    setDateText('');
+    setMoreOpen(false);
   }
 
   function advance() {
@@ -69,11 +64,6 @@ export function ReplanFlow({
       setIndex((i) => i + 1);
     }
   }
-
-  // Resolve the typed date live for the preview (leading '@' optional).
-  const resolvedDate = dateText.trim()
-    ? resolveDueToken(dateText.trim().replace(/^@/, ''), new Date())
-    : null;
 
   // Single-key triage. While the date sheet is open its own inputs own the
   // keyboard (Esc closes it); otherwise x/↵=done, ⇧X=cancel, d=reschedule,
@@ -98,10 +88,10 @@ export function ReplanFlow({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTyping()) return;
 
-      if (datePickerOpen) {
+      if (datePickerOpen || moreOpen) {
         if (e.key === 'Escape') {
           e.preventDefault();
-          setDatePickerOpen(false);
+          closeReschedule();
         }
         return;
       }
@@ -147,7 +137,7 @@ export function ReplanFlow({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
     // `advance` closes over index/tasks.length; re-subscribe as those change.
-  }, [keyboard, datePickerOpen, current, index, tasks.length, onComplete, onCancel, onExit]);
+  }, [keyboard, datePickerOpen, moreOpen, current, index, tasks.length, onComplete, onCancel, onExit]);
 
   if (!current) {
     return (
@@ -195,56 +185,18 @@ export function ReplanFlow({
       </div>
 
       {typedReschedule ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-400 bg-slate-900 px-3 py-2.5">
-            <span className="select-none text-sm text-slate-500">@</span>
-            <input
-              autoFocus
-              type="text"
-              value={dateText}
-              onChange={(e) => setDateText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (resolvedDate) {
-                    haptic('tap');
-                    onReschedule(current.id, resolvedDate);
-                    closeReschedule();
-                    advance();
-                  }
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  closeReschedule();
-                }
-              }}
-              placeholder="tomorrow · fri · 3d · 2w · 2026-08-05"
-              spellCheck={false}
-              autoComplete="off"
-              className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={closeReschedule}
-              className="text-[11px] text-slate-600 hover:text-slate-300"
-            >
-              esc
-            </button>
-          </div>
-          <div className="px-1 text-[11px]">
-            {dateText.trim() === '' ? (
-              <span className="text-slate-600">
-                Type a date, ↵ to reschedule · esc to cancel
-              </span>
-            ) : resolvedDate ? (
-              <span className="text-emerald-300">
-                → {formatDayLabelLong(parseISTDate(resolvedDate))}
-                <span className="ml-1 text-slate-600">↵</span>
-              </span>
-            ) : (
-              <span className="text-rose-400">unrecognised date</span>
-            )}
-          </div>
-        </div>
+        <TypedDateBar
+          onPick={(date) => {
+            onReschedule(current.id, date);
+            closeReschedule();
+            advance();
+          }}
+          onClose={closeReschedule}
+          onMore={() => {
+            setDatePickerOpen(false);
+            setMoreOpen(true);
+          }}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           <ActionButton
@@ -292,15 +244,16 @@ export function ReplanFlow({
         </div>
       )}
 
-      {/* Touch devices keep the bottom sheet; keyboard uses the inline bar. */}
+      {/* Touch opens the sheet directly; keyboard starts with the typed bar
+          and reaches the sheet via tab. */}
       <DateSheet
-        open={datePickerOpen && !keyboard}
+        open={(datePickerOpen && !keyboard) || moreOpen}
         taskTitle={current.text}
         currentDue={current.due}
-        onClose={() => setDatePickerOpen(false)}
+        onClose={closeReschedule}
         onPick={(date) => {
           onReschedule(current.id, date);
-          setDatePickerOpen(false);
+          closeReschedule();
           advance();
         }}
       />

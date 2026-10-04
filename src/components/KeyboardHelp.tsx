@@ -20,7 +20,7 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ['j  k', 'move the cursor (tasks + headers)'],
       ['x  ↵', 'done (↵ on a header expands/collapses it)'],
       ['⇧X', 'cancel'],
-      ['d', 'reschedule (due date)'],
+      ['d', 'reschedule — type a date, tab for more'],
       ['s', 'schedule on the calendar'],
       ['m', 'move to another project'],
       ['g', 'manage projects (create / rename / delete)'],
@@ -36,7 +36,7 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ['x  ↵', 'done'],
       ['⇧X', 'cancel'],
-      ['d', 'reschedule (due date)'],
+      ['d', 'reschedule — type a date, tab for more'],
       ['␣  →  j', 'skip'],
       ['esc', 'exit replan'],
     ],
