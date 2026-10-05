@@ -12,6 +12,8 @@ import { PageHeader } from '../components/PageHeader';
 import { ProjectSheet } from '../components/ProjectSheet';
 import { ProjectsPanel } from '../components/ProjectsPanel';
 import { ReplanFlow } from '../components/ReplanFlow';
+import { TriageFlow } from '../components/TriageFlow';
+import { loadTriageDraft } from '../lib/triage';
 import { TaskCard } from '../components/TaskCard';
 import { TypedDateBar } from '../components/TypedDateBar';
 import { TaskOmnibar, type OmnibarHandle } from '../components/TaskOmnibar';
@@ -85,6 +87,7 @@ export default function Tasks({ onNavigate }: TasksProps) {
   const [reassigningId, setReassigningId] = useState<string | null>(null);
   const [adding, setAdding] = useState<boolean>(false);
   const [replanQueue, setReplanQueue] = useState<Task[] | null>(null);
+  const [triaging, setTriaging] = useState<boolean>(false);
   const [managingProjects, setManagingProjects] = useState<boolean>(false);
 
   const isKeyboard = useIsKeyboardDevice();
@@ -128,6 +131,18 @@ export default function Tasks({ onNavigate }: TasksProps) {
   function handleReassign(task: Task) {
     void loadProjects();
     setReassigningId(task.id);
+  }
+
+  // Re-read on every render: a draft is written/cleared inside TriageFlow.
+  const triageDraft = triaging ? null : loadTriageDraft();
+  const triagePending = triageDraft
+    ? triageDraft.cards.filter((c) => c.decision === 'pending').length
+    : 0;
+
+  function openTriage() {
+    // The review card's project chip needs the list.
+    void loadProjects();
+    setTriaging(true);
   }
 
   const replanCandidates = visibleOpen.filter((t) =>
@@ -263,7 +278,7 @@ export default function Tasks({ onNavigate }: TasksProps) {
       if (isTyping()) return;
 
       // A bottom sheet / replan view owns the screen — don't hijack its keys.
-      if (adding || reschedulingId !== null || reassigningId !== null || replanQueue) {
+      if (adding || reschedulingId !== null || reassigningId !== null || replanQueue || triaging) {
         // Esc on the reschedule sheet closes it and keeps the cursor.
         if (e.key === 'Escape') {
           if (reschedulingId !== null) closeReschedule();
@@ -362,6 +377,11 @@ export default function Tasks({ onNavigate }: TasksProps) {
           haptic('tap');
           setManagingProjects(true);
           break;
+        case 'i':
+          e.preventDefault();
+          haptic('tap');
+          openTriage();
+          break;
         case 'r':
           if (replanCandidates.length === 0) break;
           e.preventDefault();
@@ -385,6 +405,7 @@ export default function Tasks({ onNavigate }: TasksProps) {
     reschedulingId,
     reassigningId,
     replanQueue,
+    triaging,
     managingProjects,
     replanCandidates,
     open,
@@ -427,6 +448,18 @@ export default function Tasks({ onNavigate }: TasksProps) {
     );
   }
 
+  if (triaging) {
+    return (
+      <TriageFlow
+        projects={projects}
+        keyboard={isKeyboard}
+        onCreateProject={createProject}
+        onCommitted={() => void refresh()}
+        onExit={() => setTriaging(false)}
+      />
+    );
+  }
+
   if (replanQueue) {
     return (
       <ReplanFlow
@@ -449,6 +482,21 @@ export default function Tasks({ onNavigate }: TasksProps) {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            haptic('tap');
+            openTriage();
+          }}
+          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95 ${
+            triageDraft
+              ? 'border-amber-700/70 bg-amber-500/10 text-amber-200 hover:border-amber-600'
+              : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:text-slate-100'
+          }`}
+        >
+          {triageDraft ? `📥 Resume triage (${triagePending})` : '📥 Triage'}
+          {isKeyboard && <KeyHint>i</KeyHint>}
+        </button>
         {replanCandidates.length > 0 && (
           <button
             type="button"

@@ -7,6 +7,9 @@ const KEYS = {
   learnLastTopicSlug: 'learn:lastTopicSlug',
   authToken: 'auth:token',
   partnerYou: 'partner:you',
+  // In-progress Task Triage review (cards + decisions) so a backgrounded
+  // PWA or a tab switch doesn't throw away a 14-card review.
+  triageDraft: 'triage:draft',
 } as const;
 
 export type StorageKey = keyof typeof KEYS;

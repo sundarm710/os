@@ -26,6 +26,7 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ['g', 'manage projects (create / rename / delete)'],
       ['⇧C', 'collapse the selected row’s group'],
       ['r', 'replan overdue + today + undated'],
+      ['i', 'triage a pasted task list'],
       ['⇧R', 'toggle routines'],
       ['⇧P', 'group by project'],
       ['esc', 'clear the cursor'],
