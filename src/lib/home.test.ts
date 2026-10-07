@@ -6,6 +6,7 @@ import {
   moveTargetsFor,
   stockLevel,
   addPhotoCard,
+  shownAliases,
   daysUntil,
   expiryLabel,
   matchesFilter,
@@ -242,5 +243,17 @@ describe('addPhotoCard', () => {
 
   it('gives new perishables a full stock level', () => {
     expect(addPhotoCard(start, 0, null, 'Milk', 'perishable').cards[1].attrs).toEqual({ level: 'full' });
+  });
+});
+
+describe('shownAliases', () => {
+  const n = (kind: HomeNode['kind'], aliases: string[]): HomeNode => ({ id: 'a', name: 'X', kind, status: 'ok', aliases });
+  it('shows real alternative names on items and containers', () => {
+    expect(shownAliases(n('item', ['pearl millet', 'kambu']))).toEqual(['pearl millet', 'kambu']);
+    expect(shownAliases(n('container', ['center']))).toEqual(['center']);
+  });
+  it('hides layout seed aliases on places but keeps ones you added', () => {
+    expect(shownAliases(n('slot', ['center', 'centre']))).toEqual([]);
+    expect(shownAliases(n('slot', ['centre', 'masala shelf']))).toEqual(['masala shelf']);
   });
 });

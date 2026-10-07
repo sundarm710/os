@@ -92,6 +92,7 @@ export type HomeNode = {
   kind: Place['kind'] | 'item';
   category?: Category;
   level?: string;
+  aliases?: string[];
   expires_on?: string; // YYYY-MM-DD
   due_on?: string;
   qty?: number;
@@ -276,6 +277,14 @@ export function nodePaths(nodes: HomeNode[]): Map<string, string> {
     out.set(n.id, parts.reverse().join(' › '));
   }
   return out;
+}
+
+// Layout seed aliases that exist only so voice search understands "centre shelf" — not worth showing.
+const SEED_ALIASES = new Set(['center', 'centre', 'left side', 'right side']);
+
+/** Alternative names worth showing next to a name; empty when there are none. */
+export function shownAliases(n: HomeNode): string[] {
+  return (n.aliases ?? []).filter((a) => !(n.kind !== 'item' && n.kind !== 'container' && SEED_ALIASES.has(a.toLowerCase())));
 }
 
 export const addAlias = (id: string, alias: string) => homeAction({ action: 'alias', ref: id, alias });

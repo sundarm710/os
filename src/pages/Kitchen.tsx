@@ -10,6 +10,7 @@ import {
   nodePaths,
   renamePlace,
   setExpiry,
+  shownAliases,
   type Filter,
   LEVEL_STYLE,
   LEVELS,
@@ -335,6 +336,9 @@ function Branch(props: BranchProps) {
             {level && <span className={`mr-2 inline-block h-2 w-2 shrink-0 rounded-full ${LEVEL_STYLE[level].dot}`} />}
             {node.kind === 'container' ? '📦 ' : ''}
             {node.name}
+            {shownAliases(node).length > 0 && (
+              <span className="ml-1.5 truncate text-xs font-normal text-slate-500">({shownAliases(node).join(', ')})</span>
+            )}
             {isItem && node.qty != null && (
               <span className="ml-1 text-xs text-slate-600">
                 ×{node.qty}
@@ -462,7 +466,12 @@ function FilterRow({ node, path, today, onOpen }: { node: HomeNode; path: string
       <button type="button" {...press} className="flex w-full select-none items-center gap-3 rounded-lg px-2 py-2 text-left">
         {level && <span className={`h-2 w-2 shrink-0 rounded-full ${LEVEL_STYLE[level].dot}`} />}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-slate-100">{node.name}</span>
+          <span className="block truncate text-slate-100">
+            {node.name}
+            {shownAliases(node).length > 0 && (
+              <span className="ml-1.5 text-xs text-slate-500">({shownAliases(node).join(', ')})</span>
+            )}
+          </span>
           <span className="block truncate text-xs text-slate-500">{path.split(' › ').slice(0, -1).join(' › ')}</span>
         </span>
         {exp && (
