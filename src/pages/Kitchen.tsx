@@ -2,6 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../lib/haptic';
 import {
   addAlias,
+  addItem,
+  LEVEL_STYLE,
+  LEVELS,
+  setLevel,
+  setType,
+  stockLevel,
+  TYPE_OPTIONS,
+  type Category,
   childrenByParent,
   fetchNodes,
   loadPhotoDraft,
@@ -157,6 +165,7 @@ export default function Kitchen() {
               }}
               note={note}
               setNote={setNote}
+              reload={load}
               pickPhoto={() => fileRef.current?.click()}
             />
           )))}
@@ -164,12 +173,18 @@ export default function Kitchen() {
       )}
 
       {moving && nodes && (
-        <MoveSheet
+        <ActionSheet
           node={moving}
           targets={moveTargetsFor(nodes, moving)}
           onClose={() => setMoving(null)}
           onMove={async (to) => {
             await movePlace(moving.id, to);
+            await load();
+            haptic('successRamp');
+            setMoving(null);
+          }}
+          onType={async (type) => {
+            await setType(moving.id, type);
             await load();
             haptic('successRamp');
             setMoving(null);
@@ -191,20 +206,32 @@ type BranchProps = {
   onMove: (n: HomeNode) => void;
   note: string;
   setNote: (v: string) => void;
+  reload: () => Promise<void>;
   pickPhoto: () => void;
 };
 
 // One row of the tree: ▸/▾ on the left, direct-child count on the right. Tap
 // the name to pick a place for a photo; long-press to move it.
 function Branch(props: BranchProps) {
-  const { node, depth, kids, open, toggle, selectedId, select, onMove, note, setNote, pickPhoto } = props;
+  const { node, depth, kids, open, toggle, selectedId, select, onMove, note, setNote, reload, pickPhoto } = props;
   const children = kids.get(node.id) ?? [];
+  const isContainer = node.kind === 'container';
+  const level = stockLevel(node);
+  const [levelOpen, setLevelOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [err, setErr] = useState<string | null>(null);
   const isItem = node.kind === 'item';
   const isOpen = open.has(node.id);
   const isSel = selectedId === node.id;
   const press = useLongPress({
     onShortPress: () => {
-      if (isItem) return;
+      if (isItem) {
+        if (level) {
+          haptic('tap');
+          setLevelOpen((v) => !v);
+        }
+        return;
+      }
       haptic('tap');
       select(node);
     },
@@ -213,7 +240,7 @@ function Branch(props: BranchProps) {
   return (
     <li>
       <div style={{ paddingLeft: `${depth * 1.1}rem` }} className="flex items-center">
-        {children.length ? (
+        {children.length || isContainer ? (
           <button
             type="button"
             onClick={() => {
@@ -236,7 +263,8 @@ function Branch(props: BranchProps) {
             isSel ? 'bg-emerald-500/10 text-emerald-200' : isItem ? 'text-slate-400' : depth === 0 ? 'font-medium text-slate-100' : 'text-slate-300'
           }`}
         >
-          <span className="truncate">
+          <span className="flex min-w-0 items-center truncate">
+            {level && <span className={`mr-2 inline-block h-2 w-2 shrink-0 rounded-full ${LEVEL_STYLE[level].dot}`} />}
             {node.kind === 'container' ? '📦 ' : ''}
             {node.name}
             {isItem && node.qty != null && (
@@ -246,9 +274,41 @@ function Branch(props: BranchProps) {
               </span>
             )}
           </span>
+          {level && level !== 'good' && (
+            <span className={`shrink-0 text-xs ${level === 'full' ? 'text-emerald-300/80' : level === 'low' ? 'text-amber-300' : 'text-rose-300'}`}>
+              {LEVEL_STYLE[level].label}
+            </span>
+          )}
           {children.length > 0 && <span className="shrink-0 text-xs text-slate-500">{children.length}</span>}
         </button>
       </div>
+      {levelOpen && level && (
+        <div className="mb-2 flex flex-wrap gap-2 pl-8 pr-3" style={{ marginLeft: `${depth * 1.1}rem` }}>
+          {LEVELS.map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={async () => {
+                haptic('tap');
+                setErr(null);
+                try {
+                  await setLevel(node.id, l);
+                  await reload();
+                  setLevelOpen(false);
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : String(e));
+                }
+              }}
+              className={`rounded-full border px-3 py-1 text-xs transition active:scale-95 ${
+                l === level ? LEVEL_STYLE[l].chip : 'border-slate-800 text-slate-400'
+              }`}
+            >
+              {LEVEL_STYLE[l].label}
+            </button>
+          ))}
+          {err && <span className="text-xs text-rose-300">{err}</span>}
+        </div>
+      )}
       {isSel && (
         <div className="mb-2 mt-1 flex items-center gap-2 pl-8 pr-3" style={{ marginLeft: `${depth * 1.1}rem` }}>
           <input
@@ -267,30 +327,83 @@ function Branch(props: BranchProps) {
           </button>
         </div>
       )}
-      {isOpen && children.length > 0 && (
+      {isOpen && (children.length > 0 || isContainer) && (
         <ul className="flex flex-col">
           {children.map((c) => (
             <Branch key={c.id} {...props} node={c} depth={depth + 1} />
           ))}
+          {isContainer && (
+            <li style={{ paddingLeft: `${(depth + 1) * 1.1}rem` }} className="pl-8">
+              <form
+                className="flex items-center gap-2 py-1 pr-3"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const name = draft.trim();
+                  if (!name) return;
+                  setErr(null);
+                  try {
+                    await addItem(node.id, name);
+                    setDraft('');
+                    haptic('successRamp');
+                    await reload();
+                  } catch (e2) {
+                    setErr(e2 instanceof Error ? e2.message : String(e2));
+                  }
+                }}
+              >
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={`＋ Add to ${node.name}`}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
+                />
+                {draft.trim() && (
+                  <button type="submit" className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm text-emerald-50 active:scale-95">
+                    Add
+                  </button>
+                )}
+              </form>
+              {err && <p className="text-xs text-rose-300">{err}</p>}
+            </li>
+          )}
         </ul>
       )}
     </li>
   );
 }
 
-function MoveSheet({
+type SheetMode = 'menu' | 'move' | 'type';
+
+function ActionSheet({
   node,
   targets,
   onClose,
   onMove,
+  onType,
 }: {
   node: HomeNode;
   targets: Place[];
   onClose: () => void;
   onMove: (to: string) => Promise<void>;
+  onType: (type: Category) => Promise<void>;
 }) {
+  const retypable = node.kind === 'item' || node.kind === 'container';
+  const [mode, setMode] = useState<SheetMode>(retypable ? 'menu' : 'move');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  const row = 'w-full rounded px-2 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 active:scale-[0.99] disabled:opacity-50';
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div
@@ -299,36 +412,52 @@ function MoveSheet({
       >
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm text-slate-400">
-            Move <span className="text-slate-100">{node.name}</span> into…
+            <span className="text-slate-100">{node.name}</span>
+            {mode === 'move' && ' — move into…'}
+            {mode === 'type' && ' — is a…'}
           </span>
-          <button type="button" onClick={onClose} className="px-1 text-slate-500">
-            ✕
+          <button type="button" onClick={mode === 'menu' || !retypable ? onClose : () => setMode('menu')} className="px-1 text-slate-500">
+            {mode === 'menu' || !retypable ? '✕' : '‹ Back'}
           </button>
         </div>
         {error && <p className="mb-2 text-sm text-rose-300">{error}</p>}
-        <ul>
-          {targets.map((t) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setError(null);
-                  try {
-                    await onMove(t.id);
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : String(e));
-                    setBusy(false);
-                  }
-                }}
-                className="w-full rounded px-2 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 active:scale-[0.99] disabled:opacity-50"
-              >
-                {t.path.split(' › ').slice(1).join(' › ') || t.path}
-              </button>
-            </li>
-          ))}
-        </ul>
+
+        {mode === 'menu' && (
+          <ul>
+            <li><button type="button" className={row} onClick={() => setMode('move')}>↗ Move</button></li>
+            <li><button type="button" className={row} onClick={() => setMode('type')}>🏷 Change type</button></li>
+          </ul>
+        )}
+
+        {mode === 'type' && (
+          <ul>
+            {TYPE_OPTIONS.map((t) => (
+              <li key={t.value}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={`${row} ${node.category === t.value ? 'text-emerald-200' : ''}`}
+                  onClick={() => void run(() => onType(t.value))}
+                >
+                  {t.label}
+                  {node.category === t.value ? ' ✓' : ''}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {mode === 'move' && (
+          <ul>
+            {targets.map((t) => (
+              <li key={t.id}>
+                <button type="button" disabled={busy} className={row} onClick={() => void run(() => onMove(t.id))}>
+                  {t.path.split(' › ').slice(1).join(' › ') || t.path}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

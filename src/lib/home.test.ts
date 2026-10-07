@@ -4,6 +4,7 @@ import {
   childKind,
   moveTargets,
   moveTargetsFor,
+  stockLevel,
   placesFromNodes,
   childrenByParent,
   type HomeNode,
@@ -160,5 +161,21 @@ describe('kitchen tree helpers', () => {
 
   it('lets an item move to any spot except its current one and the room itself', () => {
     expect(moveTargetsFor(NODES, NODES[4]).map((p) => p.id).sort()).toEqual(['c2', 'l']);
+  });
+});
+
+describe('stockLevel', () => {
+  const base: HomeNode = { id: 'x', name: 'Milk', kind: 'item', category: 'perishable', status: 'ok' };
+  it('is null for anything that is not a perishable item', () => {
+    expect(stockLevel({ ...base, category: 'cleaning' })).toBeNull();
+    expect(stockLevel({ ...base, kind: 'container' })).toBeNull();
+  });
+  it('reads full / good from the stored level, defaulting to good', () => {
+    expect(stockLevel({ ...base, level: 'full' })).toBe('full');
+    expect(stockLevel(base)).toBe('good');
+  });
+  it('lets low and out status win over the stored level', () => {
+    expect(stockLevel({ ...base, level: 'full', status: 'low' })).toBe('low');
+    expect(stockLevel({ ...base, level: 'full', status: 'out' })).toBe('empty');
   });
 });

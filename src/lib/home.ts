@@ -90,6 +90,8 @@ export type HomeNode = {
   parent_id?: string;
   name: string;
   kind: Place['kind'] | 'item';
+  category?: Category;
+  level?: string;
   qty?: number;
   unit?: string;
   status: string;
@@ -179,6 +181,45 @@ export const addPlace = (parent: Place, name: string) =>
   homeAction({ action: 'add_place', parent: parent.id, name, kind: childKind(parent) });
 export const renamePlace = (id: string, name: string) => homeAction({ action: 'rename', ref: id, name });
 export const movePlace = (id: string, to: string) => homeAction({ action: 'move', ref: id, to });
+// ── Stock level (perishables) ───────────────────────────────────────────────
+
+export const LEVELS = ['full', 'good', 'low', 'empty'] as const;
+export type Level = (typeof LEVELS)[number];
+
+/** Level shown for a perishable thing; null for everything else. low/out in the DB win over the stored level. */
+export function stockLevel(n: HomeNode): Level | null {
+  if (n.kind !== 'item' || n.category !== 'perishable') return null;
+  if (n.status === 'out') return 'empty';
+  if (n.status === 'low') return 'low';
+  return n.level === 'full' ? 'full' : 'good';
+}
+
+// Soft, desaturated tones that sit on the dark UI: green = plenty, blue = fine, amber = running out, rose = gone.
+export const LEVEL_STYLE: Record<Level, { label: string; dot: string; chip: string }> = {
+  full: { label: 'Full', dot: 'bg-emerald-400', chip: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200' },
+  good: { label: 'Good for now', dot: 'bg-sky-400', chip: 'border-sky-500/40 bg-sky-500/15 text-sky-200' },
+  low: { label: 'Running low', dot: 'bg-amber-400', chip: 'border-amber-500/40 bg-amber-500/15 text-amber-200' },
+  empty: { label: 'Empty', dot: 'bg-rose-400', chip: 'border-rose-500/40 bg-rose-500/15 text-rose-200' },
+};
+
+/** What a thing can be: a container (holds things) or one of the item categories. */
+export const TYPE_OPTIONS: { value: Category; label: string }[] = [
+  { value: 'container', label: '📦 Container' },
+  { value: 'perishable', label: '🥛 Perishable' },
+  { value: 'non_perishable', label: '🥫 Non-perishable' },
+  { value: 'cleaning', label: '🧽 Cleaning' },
+  { value: 'utensil', label: '🍴 Utensil' },
+  { value: 'appliance', label: '🔌 Appliance' },
+  { value: 'bag', label: '🛍 Bag' },
+  { value: 'other', label: 'Other' },
+];
+
+export const setLevel = (id: string, level: Level) => homeAction({ action: 'set_level', ref: id, level });
+export const setType = (id: string, type: Category) => homeAction({ action: 'set_type', ref: id, type });
+/** Quick-add a thing inside a container (perishables start Full). */
+export const addItem = (parent: string, name: string, category: Category = 'perishable') =>
+  homeAction({ action: 'add_item', parent, name, category });
+
 export const addAlias = (id: string, alias: string) => homeAction({ action: 'alias', ref: id, alias });
 export const deletePlace = (id: string) => homeAction({ action: 'delete', ref: id });
 
