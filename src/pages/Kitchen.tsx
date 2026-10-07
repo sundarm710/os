@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../lib/haptic';
 import {
+  addAlias,
   childrenByParent,
   fetchNodes,
   loadPhotoDraft,
@@ -120,7 +121,12 @@ export default function Kitchen() {
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
-          if (file && selected) setFlow({ file, place: selected, note });
+          if (file && selected) {
+            // The text box is an alternative name for this spot only — saved on it, not sent to the photo agent.
+            const alias = note.trim();
+            if (alias) void addAlias(selected.id, alias).then(() => load()).catch(() => undefined);
+            setFlow({ file, place: selected, note: '' });
+          }
         }}
       />
 
@@ -248,7 +254,7 @@ function Branch(props: BranchProps) {
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Hint (optional) — e.g. masala shelf"
+            placeholder="Alternative name (optional) — this spot only"
             className="min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
           />
           <button

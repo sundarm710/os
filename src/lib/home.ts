@@ -179,6 +179,7 @@ export const addPlace = (parent: Place, name: string) =>
   homeAction({ action: 'add_place', parent: parent.id, name, kind: childKind(parent) });
 export const renamePlace = (id: string, name: string) => homeAction({ action: 'rename', ref: id, name });
 export const movePlace = (id: string, to: string) => homeAction({ action: 'move', ref: id, to });
+export const addAlias = (id: string, alias: string) => homeAction({ action: 'alias', ref: id, alias });
 export const deletePlace = (id: string) => homeAction({ action: 'delete', ref: id });
 
 /** Places `p` may move into: not itself, not anything inside it, not where it already is. */
