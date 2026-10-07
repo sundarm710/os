@@ -10,6 +10,8 @@ const KEYS = {
   // In-progress Task Triage review (cards + decisions) so a backgrounded
   // PWA or a tab switch doesn't throw away a 14-card review.
   triageDraft: 'triage:draft',
+  // In-progress Kitchen photo review (proposal cards + decisions).
+  homePhotoDraft: 'home:photoDraft',
 } as const;
 
 export type StorageKey = keyof typeof KEYS;

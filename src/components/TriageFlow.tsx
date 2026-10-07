@@ -478,7 +478,7 @@ export function TriageFlow({ projects, keyboard, onCreateProject, onCommitted, o
   );
 }
 
-function Chip({
+export function Chip({
   children,
   onClick,
   hint,
@@ -508,7 +508,7 @@ function Chip({
   );
 }
 
-function ActionButton({
+export function ActionButton({
   children,
   tone,
   hint,

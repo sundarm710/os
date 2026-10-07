@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_WEBHOOK_CALENDAR_FETCH_URL: string;
   readonly VITE_WEBHOOK_TASKS_URL: string;
   readonly VITE_WEBHOOK_TASK_TRIAGE_URL: string;
+  readonly VITE_WEBHOOK_HOME_URL: string;
+  readonly VITE_WEBHOOK_HOME_PHOTO_URL: string;
   readonly VITE_WEBHOOK_WORKOUTS_FETCH_URL: string;
   readonly VITE_WEBHOOK_DAILY_NOTE_URL: string;
   readonly VITE_WEBHOOK_PEOPLE_URL: string;

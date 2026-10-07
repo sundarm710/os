@@ -28,7 +28,7 @@ export function TabBar({ active, onChange, showShortcuts }: Props) {
                 type="button"
                 onClick={() => onChange(tab.id)}
                 aria-current={isActive ? 'page' : undefined}
-                title={showShortcuts ? `${tab.label} — Shift+${i + 1}` : undefined}
+                title={showShortcuts && i < 9 ? `${tab.label} — Shift+${i + 1}` : undefined}
                 className={[
                   'flex flex-none min-w-[4rem] flex-col items-center gap-0.5 py-3 text-xs font-medium transition',
                   isActive ? 'text-emerald-300' : 'text-slate-400',
