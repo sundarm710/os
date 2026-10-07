@@ -3,6 +3,14 @@ import { haptic } from '../lib/haptic';
 import {
   addAlias,
   addItem,
+  addPlace,
+  expiryLabel,
+  FILTERS,
+  matchesFilter,
+  nodePaths,
+  renamePlace,
+  setExpiry,
+  type Filter,
   LEVEL_STYLE,
   LEVELS,
   setLevel,
@@ -11,6 +19,7 @@ import {
   TYPE_OPTIONS,
   type Category,
   type Level,
+  childKind,
   childrenByParent,
   fetchNodes,
   loadPhotoDraft,
@@ -30,6 +39,15 @@ export default function Kitchen() {
   const [nodes, setNodes] = useState<HomeNode[] | null>(null);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [moving, setMoving] = useState<HomeNode | null>(null);
+  const [filter, setFilter] = useState<Filter | null>(null);
+  const seeded = useRef(false);
+  // Today in Asia/Kolkata — the browser may be anywhere, the kitchen is not.
+  const today = useMemo(() => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10), []);
+  const paths = useMemo(() => nodePaths(nodes ?? []), [nodes]);
+  const counts = useMemo(
+    () => Object.fromEntries(FILTERS.map((f) => [f.id, (nodes ?? []).filter((n) => matchesFilter(n, f.id, today)).length])),
+    [nodes, today],
+  );
   const places = useMemo(() => (nodes ? placesFromNodes(nodes) : null), [nodes]);
   const kids = useMemo(() => childrenByParent(nodes ?? []), [nodes]);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +61,14 @@ export default function Kitchen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setNodes(await fetchNodes());
+      const ns = await fetchNodes();
+      setNodes(ns);
+      if (!seeded.current) {
+        // First open: level one (Left / Right) is expanded so their areas show; everything deeper stays closed.
+        seeded.current = true;
+        const roots = new Set(ns.filter((n) => !n.parent_id).map((n) => n.id));
+        setOpen(new Set(ns.filter((n) => n.parent_id && roots.has(n.parent_id)).map((n) => n.id)));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -52,6 +77,13 @@ export default function Kitchen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function finish(action: () => Promise<void>) {
+    await action();
+    await load();
+    haptic('successRamp');
+    setMoving(null);
+  }
 
   if (settings) {
     return (
@@ -86,7 +118,7 @@ export default function Kitchen() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-100">🍳 Kitchen</h1>
-          <p className="mt-1 text-sm text-slate-500">Tap ▸ to open a spot, 📷 to photograph it. Long-press anything to move it.</p>
+          <p className="mt-1 text-sm text-slate-500">Tap ▸ to open a spot, 📷 to photograph it. Long-press anything to rename, add inside, move or set its level.</p>
         </div>
         <button
           type="button"
@@ -140,6 +172,47 @@ export default function Kitchen() {
       />
 
       {nodes && (
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((f) => {
+            const on = filter === f.id;
+            const tone =
+              f.id === 'empty'
+                ? 'border-rose-500/40 bg-rose-500/15 text-rose-200'
+                : f.id === 'low'
+                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
+                  : 'border-orange-500/40 bg-orange-500/15 text-orange-200';
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => {
+                  haptic('tap');
+                  setFilter(on ? null : f.id);
+                }}
+                className={`rounded-full border px-3 py-1 text-xs transition active:scale-95 ${
+                  on ? tone : counts[f.id] ? 'border-slate-700 text-slate-300' : 'border-slate-800 text-slate-600'
+                }`}
+              >
+                {f.label} · {counts[f.id]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {nodes && filter && (
+        <ul className="flex flex-col">
+          {nodes
+            .filter((n) => matchesFilter(n, filter, today))
+            .sort((a, b) => (paths.get(a.id) ?? '').localeCompare(paths.get(b.id) ?? ''))
+            .map((n) => (
+              <FilterRow key={n.id} node={n} path={paths.get(n.id) ?? ''} today={today} onOpen={() => setMoving(n)} />
+            ))}
+          {counts[filter] === 0 && <li className="px-2 py-3 text-sm text-slate-500">Nothing here — all good.</li>}
+        </ul>
+      )}
+
+      {nodes && !filter && (
         <ul className="flex flex-col">
           {(kids.get('') ?? []).flatMap((root) => (kids.get(root.id) ?? []).map((n) => (
             <Branch
@@ -167,6 +240,7 @@ export default function Kitchen() {
               note={note}
               setNote={setNote}
               reload={load}
+              today={today}
               pickPhoto={() => fileRef.current?.click()}
             />
           )))}
@@ -177,24 +251,16 @@ export default function Kitchen() {
         <ActionSheet
           node={moving}
           targets={moveTargetsFor(nodes, moving)}
+          place={places?.find((p) => p.id === moving.id) ?? null}
           onClose={() => setMoving(null)}
-          onMove={async (to) => {
-            await movePlace(moving.id, to);
-            await load();
-            haptic('successRamp');
-            setMoving(null);
-          }}
-          onLevel={async (level) => {
-            await setLevel(moving.id, level);
-            await load();
-            haptic('successRamp');
-            setMoving(null);
-          }}
-          onType={async (type) => {
-            await setType(moving.id, type);
-            await load();
-            haptic('successRamp');
-            setMoving(null);
+          ops={{
+            level: (l) => finish(() => setLevel(moving.id, l)),
+            type: (t) => finish(() => setType(moving.id, t)),
+            move: (to) => finish(() => movePlace(moving.id, to)),
+            rename: (name) => finish(() => renamePlace(moving.id, name)),
+            expiry: (d) => finish(() => setExpiry(moving.id, d)),
+            addPlace: (p, name, kind) => finish(() => addPlace(p, name, kind)),
+            addItem: (name) => finish(() => addItem(moving.id, name)),
           }}
         />
       )}
@@ -214,13 +280,14 @@ type BranchProps = {
   note: string;
   setNote: (v: string) => void;
   reload: () => Promise<void>;
+  today: string;
   pickPhoto: () => void;
 };
 
 // One row of the tree: ▸/▾ on the left, direct-child count on the right. Tap
 // the name to pick a place for a photo; long-press to move it.
 function Branch(props: BranchProps) {
-  const { node, depth, kids, open, toggle, selectedId, select, onMove, note, setNote, reload, pickPhoto } = props;
+  const { node, depth, kids, open, toggle, selectedId, select, onMove, note, setNote, reload, today, pickPhoto } = props;
   const children = kids.get(node.id) ?? [];
   const isContainer = node.kind === 'container';
   const level = stockLevel(node);
@@ -281,6 +348,14 @@ function Branch(props: BranchProps) {
               </span>
             )}
           </span>
+          {isItem && node.expires_on && (() => {
+            const e = expiryLabel(node.expires_on, today);
+            return (
+              <span className={`shrink-0 text-xs ${e.tone === 'bad' ? 'text-rose-300' : e.tone === 'soon' ? 'text-orange-300' : 'text-slate-500'}`}>
+                {e.text}
+              </span>
+            );
+          })()}
           {level && level !== 'good' && (
             <span className={`shrink-0 text-xs ${level === 'full' ? 'text-emerald-300/80' : level === 'low' ? 'text-amber-300' : 'text-rose-300'}`}>
               {LEVEL_STYLE[level].label}
@@ -379,26 +454,61 @@ function Branch(props: BranchProps) {
   );
 }
 
-type SheetMode = 'menu' | 'level' | 'move' | 'type';
+function FilterRow({ node, path, today, onOpen }: { node: HomeNode; path: string; today: string; onOpen: () => void }) {
+  const level = stockLevel(node);
+  const press = useLongPress({ onShortPress: onOpen, onLongPress: onOpen });
+  const exp = node.expires_on ? expiryLabel(node.expires_on, today) : null;
+  return (
+    <li>
+      <button type="button" {...press} className="flex w-full select-none items-center gap-3 rounded-lg px-2 py-2 text-left">
+        {level && <span className={`h-2 w-2 shrink-0 rounded-full ${LEVEL_STYLE[level].dot}`} />}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-slate-100">{node.name}</span>
+          <span className="block truncate text-xs text-slate-500">{path.split(' › ').slice(0, -1).join(' › ')}</span>
+        </span>
+        {exp && (
+          <span className={`shrink-0 text-xs ${exp.tone === 'bad' ? 'text-rose-300' : exp.tone === 'soon' ? 'text-orange-300' : 'text-slate-500'}`}>
+            {exp.text}
+          </span>
+        )}
+      </button>
+    </li>
+  );
+}
 
+type SheetMode = 'menu' | 'level' | 'expiry' | 'rename' | 'add' | 'move' | 'type';
+
+type SheetOps = {
+  level: (l: Level) => Promise<void>;
+  type: (t: Category) => Promise<void>;
+  move: (to: string) => Promise<void>;
+  rename: (name: string) => Promise<void>;
+  expiry: (date: string | null) => Promise<void>;
+  addPlace: (parent: Place, name: string, kind: Place['kind']) => Promise<void>;
+  addItem: (name: string) => Promise<void>;
+};
+
+// Long-press sheet. Items: stock level, expiry, rename, move, type. Containers: rename, add inside, move, type.
+// Places: rename, add inside, move. Delete stays in ⚙️ settings.
 function ActionSheet({
   node,
+  place,
   targets,
   onClose,
-  onMove,
-  onType,
-  onLevel,
+  ops,
 }: {
   node: HomeNode;
+  place: Place | null;
   targets: Place[];
   onClose: () => void;
-  onMove: (to: string) => Promise<void>;
-  onType: (type: Category) => Promise<void>;
-  onLevel: (level: Level) => Promise<void>;
+  ops: SheetOps;
 }) {
-  const retypable = node.kind === 'item' || node.kind === 'container';
+  const isItem = node.kind === 'item';
+  const isContainer = node.kind === 'container';
   const current = stockLevel(node);
-  const [mode, setMode] = useState<SheetMode>(retypable ? 'menu' : 'move');
+  const [mode, setMode] = useState<SheetMode>('menu');
+  const [text, setText] = useState('');
+  const [date, setDate] = useState(node.expires_on ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -414,6 +524,19 @@ function ActionSheet({
   }
 
   const row = 'w-full rounded px-2 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 active:scale-[0.99] disabled:opacity-50';
+  const input =
+    'min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-slate-100 placeholder:text-slate-600 focus:border-slate-500 focus:outline-none';
+  const btn = 'rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-emerald-50 transition active:scale-95 disabled:opacity-50';
+  const title: Record<SheetMode, string> = {
+    menu: '',
+    level: ' — how much is left?',
+    expiry: ' — expiry date',
+    rename: ' — rename',
+    add: ' — add inside',
+    move: ' — move into…',
+    type: ' — is a…',
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div
@@ -423,12 +546,10 @@ function ActionSheet({
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm text-slate-400">
             <span className="text-slate-100">{node.name}</span>
-            {mode === 'level' && ' — how much is left?'}
-            {mode === 'move' && ' — move into…'}
-            {mode === 'type' && ' — is a…'}
+            {title[mode]}
           </span>
-          <button type="button" onClick={mode === 'menu' || !retypable ? onClose : () => setMode('menu')} className="px-1 text-slate-500">
-            {mode === 'menu' || !retypable ? '✕' : '‹ Back'}
+          <button type="button" onClick={mode === 'menu' ? onClose : () => setMode('menu')} className="px-1 text-slate-500">
+            {mode === 'menu' ? '✕' : '‹ Back'}
           </button>
         </div>
         {error && <p className="mb-2 text-sm text-rose-300">{error}</p>}
@@ -443,8 +564,51 @@ function ActionSheet({
                 </button>
               </li>
             )}
-            <li><button type="button" className={row} onClick={() => setMode('move')}>↗ Move</button></li>
-            <li><button type="button" className={row} onClick={() => setMode('type')}>🏷 Change type</button></li>
+            {isItem && (
+              <li>
+                <button type="button" className={row} onClick={() => setMode('expiry')}>
+                  📅 Expiry date{node.expires_on ? ` · ${node.expires_on}` : ''}
+                </button>
+              </li>
+            )}
+            <li>
+              <button
+                type="button"
+                className={row}
+                onClick={() => {
+                  setText(node.name);
+                  setMode('rename');
+                }}
+              >
+                ✎ Rename
+              </button>
+            </li>
+            {(place || isContainer) && !isItem && (
+              <li>
+                <button
+                  type="button"
+                  className={row}
+                  onClick={() => {
+                    setText('');
+                    setMode('add');
+                  }}
+                >
+                  ＋ Add inside
+                </button>
+              </li>
+            )}
+            <li>
+              <button type="button" className={row} onClick={() => setMode('move')}>
+                ↗ Move
+              </button>
+            </li>
+            {(isItem || isContainer) && (
+              <li>
+                <button type="button" className={row} onClick={() => setMode('type')}>
+                  🏷 Change type
+                </button>
+              </li>
+            )}
           </ul>
         )}
 
@@ -456,7 +620,7 @@ function ActionSheet({
                   type="button"
                   disabled={busy}
                   className={`${row} ${l === current ? 'text-slate-100' : ''}`}
-                  onClick={() => void run(() => onLevel(l))}
+                  onClick={() => void run(() => ops.level(l))}
                 >
                   <span className={`mr-2 inline-block h-2 w-2 rounded-full ${LEVEL_STYLE[l].dot}`} />
                   {LEVEL_STYLE[l].label}
@@ -467,6 +631,77 @@ function ActionSheet({
           </ul>
         )}
 
+        {mode === 'expiry' && (
+          <div className="flex flex-col gap-3">
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} />
+            <div className="flex gap-2">
+              <button type="button" disabled={busy || !date} className={btn} onClick={() => void run(() => ops.expiry(date))}>
+                Save
+              </button>
+              {node.expires_on && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 active:scale-95"
+                  onClick={() => void run(() => ops.expiry(null))}
+                >
+                  Clear date
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {mode === 'rename' && (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (text.trim()) void run(() => ops.rename(text.trim()));
+            }}
+          >
+            <input autoFocus value={text} onChange={(e) => setText(e.target.value)} className={input} />
+            <button type="submit" disabled={busy || !text.trim()} className={btn}>
+              Save
+            </button>
+          </form>
+        )}
+
+        {mode === 'add' && (
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!text.trim()) return;
+              if (isContainer) void run(() => ops.addItem(text.trim()));
+              else if (place) void run(() => ops.addPlace(place, text.trim(), childKind(place)));
+            }}
+          >
+            <input
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={isContainer ? 'New item — e.g. Milk' : 'New spot — e.g. Shelf 1'}
+              className={input}
+            />
+            <div className="flex gap-2">
+              <button type="submit" disabled={busy || !text.trim()} className={btn}>
+                {isContainer ? 'Add item' : 'Add spot'}
+              </button>
+              {place && !isContainer && (
+                <button
+                  type="button"
+                  disabled={busy || !text.trim()}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 active:scale-95 disabled:opacity-50"
+                  onClick={() => void run(() => ops.addPlace(place, text.trim(), 'container'))}
+                >
+                  📦 Add container
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+
         {mode === 'type' && (
           <ul>
             {TYPE_OPTIONS.map((t) => (
@@ -475,7 +710,7 @@ function ActionSheet({
                   type="button"
                   disabled={busy}
                   className={`${row} ${node.category === t.value ? 'text-emerald-200' : ''}`}
-                  onClick={() => void run(() => onType(t.value))}
+                  onClick={() => void run(() => ops.type(t.value))}
                 >
                   {t.label}
                   {node.category === t.value ? ' ✓' : ''}
@@ -489,7 +724,7 @@ function ActionSheet({
           <ul>
             {targets.map((t) => (
               <li key={t.id}>
-                <button type="button" disabled={busy} className={row} onClick={() => void run(() => onMove(t.id))}>
+                <button type="button" disabled={busy} className={row} onClick={() => void run(() => ops.move(t.id))}>
                   {t.path.split(' › ').slice(1).join(' › ') || t.path}
                 </button>
               </li>

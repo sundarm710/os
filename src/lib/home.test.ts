@@ -5,6 +5,10 @@ import {
   moveTargets,
   moveTargetsFor,
   stockLevel,
+  daysUntil,
+  expiryLabel,
+  matchesFilter,
+  nodePaths,
   placesFromNodes,
   childrenByParent,
   type HomeNode,
@@ -178,5 +182,39 @@ describe('stockLevel', () => {
   it('lets low and out status win over the stored level', () => {
     expect(stockLevel({ ...base, level: 'full', status: 'low' })).toBe('low');
     expect(stockLevel({ ...base, level: 'full', status: 'out' })).toBe('empty');
+  });
+});
+
+describe('expiry + filters', () => {
+  const today = '2026-10-07';
+  const item = (extra: Partial<HomeNode>): HomeNode => ({ id: 'i', name: 'Milk', kind: 'item', status: 'ok', ...extra });
+
+  it('counts days across month ends', () => {
+    expect(daysUntil('2026-10-12', today)).toBe(5);
+    expect(daysUntil('2026-11-01', today)).toBe(25);
+    expect(daysUntil('2026-10-05', today)).toBe(-2);
+  });
+
+  it('labels expired, imminent and far dates', () => {
+    expect(expiryLabel('2026-10-05', today)).toEqual({ text: 'expired 2d ago', tone: 'bad' });
+    expect(expiryLabel('2026-10-07', today).tone).toBe('bad');
+    expect(expiryLabel('2026-10-10', today)).toEqual({ text: 'expires in 3d', tone: 'soon' });
+    expect(expiryLabel('2026-12-25', today)).toEqual({ text: 'exp 25/12/26', tone: 'ok' });
+  });
+
+  it('filters empty, low and nearing expiry; only items qualify', () => {
+    expect(matchesFilter(item({ status: 'out' }), 'empty', today)).toBe(true);
+    expect(matchesFilter(item({ status: 'low' }), 'low', today)).toBe(true);
+    expect(matchesFilter(item({ status: 'low' }), 'empty', today)).toBe(false);
+    expect(matchesFilter(item({ expires_on: '2026-10-14' }), 'expiring', today)).toBe(true);
+    expect(matchesFilter(item({ expires_on: '2026-10-15' }), 'expiring', today)).toBe(false);
+    expect(matchesFilter({ ...item({ status: 'out' }), kind: 'container' }, 'empty', today)).toBe(false);
+  });
+
+  it('builds paths without the room name', () => {
+    const n = (id: string, name: string, parent_id?: string): HomeNode => ({ id, name, kind: 'slot', status: 'ok', parent_id });
+    const paths = nodePaths([n('k', 'Kitchen'), n('l', 'Left', 'k'), n('c', 'Cupboard 1', 'l')]);
+    expect(paths.get('c')).toBe('Left › Cupboard 1');
+    expect(paths.get('k')).toBe('');
   });
 });

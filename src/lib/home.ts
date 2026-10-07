@@ -92,6 +92,8 @@ export type HomeNode = {
   kind: Place['kind'] | 'item';
   category?: Category;
   level?: string;
+  expires_on?: string; // YYYY-MM-DD
+  due_on?: string;
   qty?: number;
   unit?: string;
   status: string;
@@ -177,8 +179,8 @@ export function childKind(parent: Place): Place['kind'] {
   return 'slot';
 }
 
-export const addPlace = (parent: Place, name: string) =>
-  homeAction({ action: 'add_place', parent: parent.id, name, kind: childKind(parent) });
+export const addPlace = (parent: Place, name: string, kind: Place['kind'] = childKind(parent)) =>
+  homeAction({ action: 'add_place', parent: parent.id, name, kind });
 export const renamePlace = (id: string, name: string) => homeAction({ action: 'rename', ref: id, name });
 export const movePlace = (id: string, to: string) => homeAction({ action: 'move', ref: id, to });
 // ── Stock level (perishables) ───────────────────────────────────────────────
@@ -219,6 +221,56 @@ export const setType = (id: string, type: Category) => homeAction({ action: 'set
 /** Quick-add a thing inside a container (perishables start Full). */
 export const addItem = (parent: string, name: string, category: Category = 'perishable') =>
   homeAction({ action: 'add_item', parent, name, category });
+
+/** Set (YYYY-MM-DD) or clear (null) an expiry date. */
+export const setExpiry = (id: string, date: string | null) => homeAction({ action: 'set_expiry', ref: id, date });
+
+// ── Filters + expiry ────────────────────────────────────────────────────────
+
+export const EXPIRY_SOON_DAYS = 7;
+
+/** Whole days from `today` (YYYY-MM-DD) to `date`; negative once past. */
+export function daysUntil(date: string, today: string): number {
+  const ms = Date.parse(date + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z');
+  return Math.round(ms / 86_400_000);
+}
+
+export function expiryLabel(date: string, today: string): { text: string; tone: 'bad' | 'soon' | 'ok' } {
+  const d = daysUntil(date, today);
+  if (d < 0) return { text: `expired ${-d}d ago`, tone: 'bad' };
+  if (d === 0) return { text: 'expires today', tone: 'bad' };
+  if (d <= EXPIRY_SOON_DAYS) return { text: `expires in ${d}d`, tone: 'soon' };
+  return { text: `exp ${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(2, 4)}`, tone: 'ok' };
+}
+
+export type Filter = 'empty' | 'low' | 'expiring';
+
+export const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'empty', label: 'Empty' },
+  { id: 'low', label: 'Running low' },
+  { id: 'expiring', label: 'Nearing expiry' },
+];
+
+export function matchesFilter(n: HomeNode, f: Filter, today: string): boolean {
+  if (n.kind !== 'item') return false;
+  if (f === 'empty') return stockLevel(n) === 'empty';
+  if (f === 'low') return stockLevel(n) === 'low';
+  return !!n.expires_on && daysUntil(n.expires_on, today) <= EXPIRY_SOON_DAYS;
+}
+
+/** id → "Left › Upper cupboard › Cupboard 1 › Bajra" (the room name is left off). */
+export function nodePaths(nodes: HomeNode[]): Map<string, string> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    const parts: string[] = [];
+    for (let cur: HomeNode | undefined = n; cur; cur = cur.parent_id ? byId.get(cur.parent_id) : undefined) {
+      if (cur.parent_id) parts.push(cur.name);
+    }
+    out.set(n.id, parts.reverse().join(' › '));
+  }
+  return out;
+}
 
 export const addAlias = (id: string, alias: string) => homeAction({ action: 'alias', ref: id, alias });
 export const deletePlace = (id: string) => homeAction({ action: 'delete', ref: id });
