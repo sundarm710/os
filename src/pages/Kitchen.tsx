@@ -10,6 +10,7 @@ import {
   stockLevel,
   TYPE_OPTIONS,
   type Category,
+  type Level,
   childrenByParent,
   fetchNodes,
   loadPhotoDraft,
@@ -179,6 +180,12 @@ export default function Kitchen() {
           onClose={() => setMoving(null)}
           onMove={async (to) => {
             await movePlace(moving.id, to);
+            await load();
+            haptic('successRamp');
+            setMoving(null);
+          }}
+          onLevel={async (level) => {
+            await setLevel(moving.id, level);
             await load();
             haptic('successRamp');
             setMoving(null);
@@ -372,7 +379,7 @@ function Branch(props: BranchProps) {
   );
 }
 
-type SheetMode = 'menu' | 'move' | 'type';
+type SheetMode = 'menu' | 'level' | 'move' | 'type';
 
 function ActionSheet({
   node,
@@ -380,14 +387,17 @@ function ActionSheet({
   onClose,
   onMove,
   onType,
+  onLevel,
 }: {
   node: HomeNode;
   targets: Place[];
   onClose: () => void;
   onMove: (to: string) => Promise<void>;
   onType: (type: Category) => Promise<void>;
+  onLevel: (level: Level) => Promise<void>;
 }) {
   const retypable = node.kind === 'item' || node.kind === 'container';
+  const current = stockLevel(node);
   const [mode, setMode] = useState<SheetMode>(retypable ? 'menu' : 'move');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -413,6 +423,7 @@ function ActionSheet({
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm text-slate-400">
             <span className="text-slate-100">{node.name}</span>
+            {mode === 'level' && ' — how much is left?'}
             {mode === 'move' && ' — move into…'}
             {mode === 'type' && ' — is a…'}
           </span>
@@ -424,8 +435,35 @@ function ActionSheet({
 
         {mode === 'menu' && (
           <ul>
+            {current && (
+              <li>
+                <button type="button" className={row} onClick={() => setMode('level')}>
+                  <span className={`mr-2 inline-block h-2 w-2 rounded-full ${LEVEL_STYLE[current].dot}`} />
+                  Stock level · {LEVEL_STYLE[current].label}
+                </button>
+              </li>
+            )}
             <li><button type="button" className={row} onClick={() => setMode('move')}>↗ Move</button></li>
             <li><button type="button" className={row} onClick={() => setMode('type')}>🏷 Change type</button></li>
+          </ul>
+        )}
+
+        {mode === 'level' && (
+          <ul>
+            {LEVELS.map((l) => (
+              <li key={l}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={`${row} ${l === current ? 'text-slate-100' : ''}`}
+                  onClick={() => void run(() => onLevel(l))}
+                >
+                  <span className={`mr-2 inline-block h-2 w-2 rounded-full ${LEVEL_STYLE[l].dot}`} />
+                  {LEVEL_STYLE[l].label}
+                  {l === current ? ' ✓' : ''}
+                </button>
+              </li>
+            ))}
           </ul>
         )}
 

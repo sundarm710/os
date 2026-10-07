@@ -166,9 +166,10 @@ describe('kitchen tree helpers', () => {
 
 describe('stockLevel', () => {
   const base: HomeNode = { id: 'x', name: 'Milk', kind: 'item', category: 'perishable', status: 'ok' };
-  it('is null for anything that is not a perishable item', () => {
-    expect(stockLevel({ ...base, category: 'cleaning' })).toBeNull();
+  it('applies to any item but not to containers or places', () => {
+    expect(stockLevel({ ...base, category: 'non_perishable' })).toBe('good');
     expect(stockLevel({ ...base, kind: 'container' })).toBeNull();
+    expect(stockLevel({ ...base, kind: 'slot' })).toBeNull();
   });
   it('reads full / good from the stored level, defaulting to good', () => {
     expect(stockLevel({ ...base, level: 'full' })).toBe('full');

@@ -186,9 +186,9 @@ export const movePlace = (id: string, to: string) => homeAction({ action: 'move'
 export const LEVELS = ['full', 'good', 'low', 'empty'] as const;
 export type Level = (typeof LEVELS)[number];
 
-/** Level shown for a perishable thing; null for everything else. low/out in the DB win over the stored level. */
+/** Level shown for an item (any category — grains and tins run out too); null for places and containers. low/out in the DB win over the stored level. */
 export function stockLevel(n: HomeNode): Level | null {
-  if (n.kind !== 'item' || n.category !== 'perishable') return null;
+  if (n.kind !== 'item') return null;
   if (n.status === 'out') return 'empty';
   if (n.status === 'low') return 'low';
   return n.level === 'full' ? 'full' : 'good';
