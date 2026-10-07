@@ -3,7 +3,7 @@
 // time, then everything is saved in one add_batch call. Nothing reaches the
 // inventory before commitPhoto().
 
-import { postJson } from './webhookClient';
+import { postJson, WebhookError } from './webhookClient';
 import { clearKey, readString, writeString } from './storage';
 
 const HOME_URL = import.meta.env.VITE_WEBHOOK_HOME_URL;
@@ -82,6 +82,50 @@ export async function fetchPlaces(): Promise<Place[]> {
   const data = (await res.json()) as { ok: boolean; places?: Place[]; error?: string };
   if (!data.ok || !data.places) throw new Error(data.error || 'Could not load places');
   return data.places;
+}
+
+// ── Layout (Kitchen settings): add / rename / move / delete places ──────────
+
+function errorFrom(body: string): string | null {
+  try {
+    return (JSON.parse(body) as { error?: string }).error ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function homeAction(payload: Record<string, unknown>): Promise<void> {
+  let res: Response;
+  try {
+    res = await postJson(HOME_URL, payload);
+  } catch (e) {
+    // 400s carry a useful message ("still holds 3 thing(s)…") in the body.
+    if (e instanceof WebhookError) throw new Error(errorFrom(e.body) ?? e.message);
+    throw e;
+  }
+  const data = (await res.json()) as { ok: boolean; error?: string };
+  if (!data.ok) throw new Error(data.error || 'Something went wrong');
+}
+
+/** The kind a new place gets from where it is added: rooms hold zones, containers hold containers. */
+export function childKind(parent: Place): Place['kind'] {
+  if (parent.kind === 'space') return 'zone';
+  if (parent.kind === 'container') return 'container';
+  return 'slot';
+}
+
+export const addPlace = (parent: Place, name: string) =>
+  homeAction({ action: 'add_place', parent: parent.id, name, kind: childKind(parent) });
+export const renamePlace = (id: string, name: string) => homeAction({ action: 'rename', ref: id, name });
+export const movePlace = (id: string, to: string) => homeAction({ action: 'move', ref: id, to });
+export const deletePlace = (id: string) => homeAction({ action: 'delete', ref: id });
+
+/** Places `p` may move into: not itself, not anything inside it, not where it already is. */
+export function moveTargets(places: Place[], p: Place): Place[] {
+  const parentPath = p.path.split(' › ').slice(0, -1).join(' › ');
+  return places.filter(
+    (t) => t.id !== p.id && !t.path.startsWith(p.path + ' › ') && t.path !== parentPath,
+  );
 }
 
 export async function proposePhoto(image: string, parent: string, note: string): Promise<PhotoProposal> {

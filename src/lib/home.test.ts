@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPhotoBatch,
+  childKind,
+  moveTargets,
   decidePhotoCard,
   nextPendingPhotoIndex,
   summarizePhoto,
   toPhotoCards,
+  type Place,
   type ProposedItem,
 } from './home';
 
@@ -94,5 +97,34 @@ describe('buildPhotoBatch', () => {
     cards = decidePhotoCard(cards, 0, 'accepted');
     cards = decidePhotoCard(cards, 1, 'accepted');
     expect(buildPhotoBatch(cards)).toEqual([{ name: 'Toor dal', kind: 'item', category: 'non_perishable' }]);
+  });
+});
+
+const place = (id: string, path: string, kind: Place['kind']): Place => ({ id, path, kind, items: 0 });
+const PLACES: Place[] = [
+  place('k', 'Kitchen', 'space'),
+  place('u', 'Kitchen › Upper cupboard', 'zone'),
+  place('ul', 'Kitchen › Upper cupboard › Left', 'slot'),
+  place('ul1', 'Kitchen › Upper cupboard › Left › Shelf 1', 'slot'),
+  place('box', 'Kitchen › Upper cupboard › Left › Shelf 1 › Spice box', 'container'),
+  place('lo', 'Kitchen › Loft', 'zone'),
+  place('uleft2', 'Kitchen › Upper cupboard › Leftovers', 'slot'),
+];
+
+describe('childKind', () => {
+  it('rooms hold zones, containers hold containers, everything else holds slots', () => {
+    expect(childKind(PLACES[0])).toBe('zone');
+    expect(childKind(PLACES[2])).toBe('slot');
+    expect(childKind(PLACES[4])).toBe('container');
+  });
+});
+
+describe('moveTargets', () => {
+  it('excludes itself, its descendants and its current parent', () => {
+    expect(moveTargets(PLACES, PLACES[2]).map((p) => p.id)).toEqual(['k', 'lo', 'uleft2']);
+  });
+
+  it('does not treat a sibling with a longer name as a descendant', () => {
+    expect(moveTargets(PLACES, PLACES[2]).map((p) => p.id)).toContain('uleft2');
   });
 });

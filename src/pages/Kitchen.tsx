@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { haptic } from '../lib/haptic';
 import { fetchPlaces, loadPhotoDraft, type Place } from '../lib/home';
 import { PhotoInventoryFlow, type PhotoStart } from '../components/PhotoInventoryFlow';
+import { KitchenLayout } from '../components/KitchenLayout';
 
 // Kitchen tab, v1: pick a place, photograph it, review what the agent saw.
 // The visual kitchen map and due list come next (see 960 Agents/so-home).
@@ -11,6 +12,7 @@ export default function Kitchen() {
   const [selected, setSelected] = useState<Place | null>(null);
   const [note, setNote] = useState<string>('');
   const [flow, setFlow] = useState<PhotoStart | 'resume' | null>(null);
+  const [settings, setSettings] = useState<boolean>(false);
   const [draftCount, setDraftCount] = useState<number>(() => loadPhotoDraft()?.cards.length ?? 0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -26,6 +28,20 @@ export default function Kitchen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  if (settings) {
+    return (
+      <KitchenLayout
+        places={places}
+        reload={load}
+        onDone={() => {
+          // A renamed/moved/deleted spot may be the one selected here.
+          setSelected(null);
+          setSettings(false);
+        }}
+      />
+    );
+  }
 
   if (flow) {
     return (
@@ -43,9 +59,22 @@ export default function Kitchen() {
 
   return (
     <section className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-100">🍳 Kitchen</h1>
-        <p className="mt-1 text-sm text-slate-500">Pick a spot, snap a photo — you review everything before it’s saved.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-100">🍳 Kitchen</h1>
+          <p className="mt-1 text-sm text-slate-500">Pick a spot, snap a photo — you review everything before it’s saved.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            haptic('tap');
+            setSettings(true);
+          }}
+          aria-label="Kitchen layout settings"
+          className="shrink-0 rounded-full border border-slate-800 bg-slate-900 p-2 text-xl leading-none transition active:scale-95 hover:border-slate-600"
+        >
+          ⚙️
+        </button>
       </div>
 
       {draftCount > 0 && (
