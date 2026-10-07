@@ -84,6 +84,67 @@ export async function fetchPlaces(): Promise<Place[]> {
   return data.places;
 }
 
+/** Any live thing in the home: a place, a container, or an item. */
+export type HomeNode = {
+  id: string;
+  parent_id?: string;
+  name: string;
+  kind: Place['kind'] | 'item';
+  qty?: number;
+  unit?: string;
+  status: string;
+};
+
+export async function fetchNodes(): Promise<HomeNode[]> {
+  const res = await postJson(HOME_URL, { action: 'nodes' });
+  const data = (await res.json()) as { ok: boolean; nodes?: HomeNode[]; error?: string };
+  if (!data.ok || !data.nodes) throw new Error(data.error || 'Could not load the kitchen');
+  return data.nodes;
+}
+
+/** parent id (or '' for roots) → its direct children, in name order. */
+export function childrenByParent(nodes: HomeNode[]): Map<string, HomeNode[]> {
+  const out = new Map<string, HomeNode[]>();
+  for (const n of nodes) {
+    const key = n.parent_id ?? '';
+    const list = out.get(key);
+    if (list) list.push(n);
+    else out.set(key, [n]);
+  }
+  return out;
+}
+
+/** Places and containers (no items) with breadcrumb paths, in the shape the photo flow and layout screen use. */
+export function placesFromNodes(nodes: HomeNode[]): Place[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const kids = childrenByParent(nodes);
+  const pathOf = (n: HomeNode): string => {
+    const parts: string[] = [];
+    for (let cur: HomeNode | undefined = n; cur; cur = cur.parent_id ? byId.get(cur.parent_id) : undefined) {
+      parts.push(cur.name);
+    }
+    return parts.reverse().join(' › ');
+  };
+  return nodes
+    .filter((n): n is HomeNode & { kind: Place['kind'] } => n.kind !== 'item')
+    .map((n) => ({
+      id: n.id,
+      path: pathOf(n),
+      kind: n.kind,
+      items: (kids.get(n.id) ?? []).filter((c) => c.kind === 'item').length,
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** Where a thing may be moved: any place or container except itself, what is inside it, or where it already is. */
+export function moveTargetsFor(nodes: HomeNode[], node: HomeNode): Place[] {
+  const places = placesFromNodes(nodes);
+  const own = places.find((p) => p.id === node.id);
+  if (own) return moveTargets(places, own);
+  // Items: any spot below the room itself, except the one they are already in.
+  return places.filter((p) => p.kind !== 'space' && p.id !== node.parent_id);
+}
+
 // ── Layout (Kitchen settings): add / rename / move / delete places ──────────
 
 function errorFrom(body: string): string | null {

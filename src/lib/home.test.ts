@@ -3,6 +3,10 @@ import {
   buildPhotoBatch,
   childKind,
   moveTargets,
+  moveTargetsFor,
+  placesFromNodes,
+  childrenByParent,
+  type HomeNode,
   decidePhotoCard,
   nextPendingPhotoIndex,
   summarizePhoto,
@@ -126,5 +130,35 @@ describe('moveTargets', () => {
 
   it('does not treat a sibling with a longer name as a descendant', () => {
     expect(moveTargets(PLACES, PLACES[2]).map((p) => p.id)).toContain('uleft2');
+  });
+});
+
+describe('kitchen tree helpers', () => {
+  const N = (id: string, name: string, kind: HomeNode['kind'], parent_id?: string): HomeNode => ({
+    id, name, kind, parent_id, status: 'ok',
+  });
+  const NODES = [
+    N('k', 'Kitchen', 'space'),
+    N('l', 'Left', 'zone', 'k'),
+    N('c1', 'Cupboard 1', 'slot', 'l'),
+    N('c2', 'Cupboard 2', 'slot', 'l'),
+    N('rice', 'Rice', 'item', 'c1'),
+    N('dal', 'Dal', 'item', 'c1'),
+  ];
+
+  it('groups direct children by parent', () => {
+    expect(childrenByParent(NODES).get('c1')?.map((n) => n.name)).toEqual(['Rice', 'Dal']);
+    expect(childrenByParent(NODES).get('')?.map((n) => n.id)).toEqual(['k']);
+  });
+
+  it('derives places with breadcrumb paths and item counts, without items', () => {
+    const places = placesFromNodes(NODES);
+    expect(places.map((p) => p.path)).toContain('Kitchen › Left › Cupboard 1');
+    expect(places.find((p) => p.id === 'c1')?.items).toBe(2);
+    expect(places.some((p) => p.id === 'rice')).toBe(false);
+  });
+
+  it('lets an item move to any spot except its current one and the room itself', () => {
+    expect(moveTargetsFor(NODES, NODES[4]).map((p) => p.id).sort()).toEqual(['c2', 'l']);
   });
 });
