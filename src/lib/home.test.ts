@@ -5,6 +5,7 @@ import {
   moveTargets,
   moveTargetsFor,
   stockLevel,
+  addPhotoCard,
   daysUntil,
   expiryLabel,
   matchesFilter,
@@ -216,5 +217,30 @@ describe('expiry + filters', () => {
     const paths = nodePaths([n('k', 'Kitchen'), n('l', 'Left', 'k'), n('c', 'Cupboard 1', 'l')]);
     expect(paths.get('c')).toBe('Left › Cupboard 1');
     expect(paths.get('k')).toBe('');
+  });
+});
+
+describe('addPhotoCard', () => {
+  const start = toPhotoCards([{ ...item(1, 'Spice box'), kind: 'container', children: [item(2, 'Cumin')] }]);
+
+  it('nests a hand-added thing inside a container card and accepts that container', () => {
+    const { cards, index } = addPhotoCard(start, 0, start[0], 'Turmeric', 'non_perishable');
+    expect(index).toBe(1);
+    expect(cards[1]).toMatchObject({ name: 'Turmeric', parentN: 1, inside: 'Spice box', decision: 'accepted', category: 'non_perishable' });
+    expect(cards[0].decision).toBe('accepted');
+    expect(cards.map((c) => c.n)).toEqual([1, 3, 2]);
+  });
+
+  it('adds a new container that later things can go into, and commits the nesting', () => {
+    const a = addPhotoCard(start, 1, null, 'Steel box', 'container');
+    expect(a.cards[2]).toMatchObject({ kind: 'container', parentN: null });
+    const b = addPhotoCard(a.cards, a.index, a.cards[a.index], 'Lid', 'other');
+    const batch = buildPhotoBatch(b.cards.map((c) => ({ ...c, decision: 'accepted' as const })));
+    const box = batch.find((x) => x.name === 'Steel box');
+    expect(box?.children?.map((x) => x.name)).toEqual(['Lid']);
+  });
+
+  it('gives new perishables a full stock level', () => {
+    expect(addPhotoCard(start, 0, null, 'Milk', 'perishable').cards[1].attrs).toEqual({ level: 'full' });
   });
 });

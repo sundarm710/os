@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { haptic } from '../lib/haptic';
 import {
-  CATEGORIES,
+  addPhotoCard,
   clearPhotoDraft,
   commitPhoto,
   decidePhotoCard,
@@ -12,6 +12,7 @@ import {
   savePhotoDraft,
   summarizePhoto,
   toPhotoCards,
+  TYPE_OPTIONS,
   type Category,
   type PhotoCard,
   type PhotoCommitResult,
@@ -31,17 +32,6 @@ interface Props {
 
 type Stage = 'reading' | 'review' | 'summary' | 'committing' | 'result' | 'failed';
 
-const CATEGORY_LABEL: Record<Category, string> = {
-  perishable: '🥛 Perishable',
-  non_perishable: '🫙 Pantry',
-  appliance: '🔌 Appliance',
-  cleaning: '🧽 Cleaning',
-  utensil: '🍴 Utensil',
-  container: '📦 Container',
-  bag: '🛍 Bag',
-  other: '• Other',
-};
-
 // Photo of a place → agent proposes what's in it → review one card at a time
 // (same rhythm as Task Triage) → confirm → one add_batch call. The review is
 // saved to localStorage as it goes, so leaving mid-way resumes.
@@ -55,6 +45,9 @@ export function PhotoInventoryFlow({ start, onCommitted, onExit }: Props) {
   const editRef = useRef<HTMLInputElement>(null);
   const editCancelled = useRef<boolean>(false);
   const started = useRef<boolean>(false);
+  const [addText, setAddText] = useState<string>('');
+  const [addCategory, setAddCategory] = useState<Category>('perishable');
+  const [justAdded, setJustAdded] = useState<string | null>(null);
 
   const cards = draft?.cards ?? [];
   const index = draft?.index ?? 0;
@@ -88,6 +81,8 @@ export function PhotoInventoryFlow({ start, onCommitted, onExit }: Props) {
     if (draft && draft.cards.length && (stage === 'review' || stage === 'summary')) savePhotoDraft(draft);
   }, [draft, stage]);
 
+  useEffect(() => setJustAdded(null), [index]);
+
   useEffect(() => {
     if (editing) editRef.current?.focus();
   }, [editing]);
@@ -112,6 +107,18 @@ export function PhotoInventoryFlow({ start, onCommitted, onExit }: Props) {
     if (!draft) return;
     haptic('tap');
     goTo(draft.cards, draft.index);
+  }
+
+  // Add by hand: inside this card when it is a container, otherwise next to it (same container).
+  function addHere() {
+    if (!draft || !current || !addText.trim()) return;
+    const parent = current.kind === 'container' ? current : (cards.find((c) => c.n === current.parentN) ?? null);
+    const added = addPhotoCard(draft.cards, draft.index, parent, addText, addCategory);
+    haptic('tap');
+    setJustAdded(addText.trim());
+    setAddText('');
+    // A new box is where the next things go — jump to it so the input now targets it.
+    setDraft((d) => d && { ...d, cards: added.cards, index: addCategory === 'container' ? added.index : d.index });
   }
 
   function startEdit() {
@@ -315,12 +322,15 @@ export function PhotoInventoryFlow({ start, onCommitted, onExit }: Props) {
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
           <select
             value={current.category}
-            onChange={(e) => update({ category: e.target.value as Category })}
+            onChange={(e) => {
+              const category = e.target.value as Category;
+              update({ category, kind: category === 'container' ? 'container' : 'item' });
+            }}
             className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-300 focus:outline-none"
           >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABEL[c]}
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>
@@ -355,6 +365,47 @@ export function PhotoInventoryFlow({ start, onCommitted, onExit }: Props) {
             </label>
           )}
         </div>
+
+        <form
+          className="mt-5 border-t border-slate-800 pt-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addHere();
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <input
+              value={addText}
+              onChange={(e) => setAddText(e.target.value)}
+              placeholder={
+                current.kind === 'container'
+                  ? `＋ Add inside ${current.name}`
+                  : current.inside
+                    ? `＋ Add another inside ${current.inside}`
+                    : '＋ Add another thing here'
+              }
+              className="min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
+            />
+            <select
+              value={addCategory}
+              onChange={(e) => setAddCategory(e.target.value as Category)}
+              aria-label="Type of the new thing"
+              className="max-w-[6.5rem] rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-2 text-xs text-slate-300 focus:outline-none"
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            {addText.trim() && (
+              <button type="submit" className="shrink-0 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-emerald-50 active:scale-95">
+                Add
+              </button>
+            )}
+          </div>
+          {justAdded && <p className="mt-2 text-xs text-slate-500">Added “{justAdded}” ✓ — add more, or carry on.</p>}
+        </form>
       </div>
 
       <div className="flex flex-col gap-3">

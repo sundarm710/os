@@ -52,7 +52,6 @@ export default function Kitchen() {
   const kids = useMemo(() => childrenByParent(nodes ?? []), [nodes]);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Place | null>(null);
-  const [note, setNote] = useState<string>('');
   const [flow, setFlow] = useState<PhotoStart | 'resume' | null>(null);
   const [settings, setSettings] = useState<boolean>(false);
   const [draftCount, setDraftCount] = useState<number>(() => loadPhotoDraft()?.cards.length ?? 0);
@@ -106,7 +105,6 @@ export default function Kitchen() {
         onCommitted={() => void load()}
         onExit={() => {
           setFlow(null);
-          setNote('');
           setDraftCount(loadPhotoDraft()?.cards.length ?? 0);
         }}
       />
@@ -163,9 +161,6 @@ export default function Kitchen() {
           const file = e.target.files?.[0];
           e.target.value = '';
           if (file && selected) {
-            // The text box is an alternative name for this spot only — saved on it, not sent to the photo agent.
-            const alias = note.trim();
-            if (alias) void addAlias(selected.id, alias).then(() => load()).catch(() => undefined);
             setFlow({ file, place: selected, note: '' });
           }
         }}
@@ -221,6 +216,7 @@ export default function Kitchen() {
               depth={0}
               kids={kids}
               open={open}
+              expand={(id) => setOpen((prev) => new Set(prev).add(id))}
               toggle={(id) =>
                 setOpen((prev) => {
                   const next = new Set(prev);
@@ -237,8 +233,6 @@ export default function Kitchen() {
                 haptic('tap');
                 setMoving(n);
               }}
-              note={note}
-              setNote={setNote}
               reload={load}
               today={today}
               pickPhoto={() => fileRef.current?.click()}
@@ -258,6 +252,7 @@ export default function Kitchen() {
             type: (t) => finish(() => setType(moving.id, t)),
             move: (to) => finish(() => movePlace(moving.id, to)),
             rename: (name) => finish(() => renamePlace(moving.id, name)),
+            alias: (name) => finish(() => addAlias(moving.id, name)),
             expiry: (d) => finish(() => setExpiry(moving.id, d)),
             addPlace: (p, name, kind) => finish(() => addPlace(p, name, kind)),
             addItem: (name) => finish(() => addItem(moving.id, name)),
@@ -274,11 +269,10 @@ type BranchProps = {
   kids: Map<string, HomeNode[]>;
   open: Set<string>;
   toggle: (id: string) => void;
+  expand: (id: string) => void;
   selectedId: string | null;
   select: (n: HomeNode) => void;
   onMove: (n: HomeNode) => void;
-  note: string;
-  setNote: (v: string) => void;
   reload: () => Promise<void>;
   today: string;
   pickPhoto: () => void;
@@ -287,12 +281,12 @@ type BranchProps = {
 // One row of the tree: ▸/▾ on the left, direct-child count on the right. Tap
 // the name to pick a place for a photo; long-press to move it.
 function Branch(props: BranchProps) {
-  const { node, depth, kids, open, toggle, selectedId, select, onMove, note, setNote, reload, today, pickPhoto } = props;
+  const { node, depth, kids, open, toggle, expand, selectedId, select, onMove, reload, today, pickPhoto } = props;
   const children = kids.get(node.id) ?? [];
-  const isContainer = node.kind === 'container';
   const level = stockLevel(node);
   const [levelOpen, setLevelOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [cat, setCat] = useState<Category>('perishable');
   const [err, setErr] = useState<string | null>(null);
   const isItem = node.kind === 'item';
   const isOpen = open.has(node.id);
@@ -314,7 +308,7 @@ function Branch(props: BranchProps) {
   return (
     <li>
       <div style={{ paddingLeft: `${depth * 1.1}rem` }} className="flex items-center">
-        {children.length || isContainer ? (
+        {children.length ? (
           <button
             type="button"
             onClick={() => {
@@ -393,12 +387,50 @@ function Branch(props: BranchProps) {
       )}
       {isSel && (
         <div className="mb-2 mt-1 flex items-center gap-2 pl-8 pr-3" style={{ marginLeft: `${depth * 1.1}rem` }}>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Alternative name (optional) — this spot only"
-            className="min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
-          />
+          <form
+            className="flex min-w-0 flex-1 items-center gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const name = draft.trim();
+              if (!name) return;
+              setErr(null);
+              try {
+                await addItem(node.id, name, cat);
+                setDraft('');
+                haptic('successRamp');
+                expand(node.id);
+                await reload();
+              } catch (e2) {
+                setErr(e2 instanceof Error ? e2.message : String(e2));
+              }
+            }}
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={`＋ Add item to ${node.name}`}
+              className="min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
+            />
+            {draft.trim() && (
+              <>
+                <select
+                  value={cat}
+                  onChange={(e) => setCat(e.target.value as Category)}
+                  aria-label="Type of the new thing"
+                  className="max-w-[6.5rem] rounded-lg border border-slate-800 bg-slate-900/60 px-2 py-2 text-xs text-slate-300 focus:outline-none"
+                >
+                  {TYPE_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="shrink-0 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-emerald-50 active:scale-95">
+                  Add
+                </button>
+              </>
+            )}
+          </form>
           <button
             type="button"
             onClick={pickPhoto}
@@ -409,45 +441,12 @@ function Branch(props: BranchProps) {
           </button>
         </div>
       )}
-      {isOpen && (children.length > 0 || isContainer) && (
+      {isSel && err && <p className="pb-1 pl-8 text-xs text-rose-300">{err}</p>}
+      {isOpen && children.length > 0 && (
         <ul className="flex flex-col">
           {children.map((c) => (
             <Branch key={c.id} {...props} node={c} depth={depth + 1} />
           ))}
-          {isContainer && (
-            <li style={{ paddingLeft: `${(depth + 1) * 1.1}rem` }} className="pl-8">
-              <form
-                className="flex items-center gap-2 py-1 pr-3"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const name = draft.trim();
-                  if (!name) return;
-                  setErr(null);
-                  try {
-                    await addItem(node.id, name);
-                    setDraft('');
-                    haptic('successRamp');
-                    await reload();
-                  } catch (e2) {
-                    setErr(e2 instanceof Error ? e2.message : String(e2));
-                  }
-                }}
-              >
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={`＋ Add to ${node.name}`}
-                  className="min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
-                />
-                {draft.trim() && (
-                  <button type="submit" className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm text-emerald-50 active:scale-95">
-                    Add
-                  </button>
-                )}
-              </form>
-              {err && <p className="text-xs text-rose-300">{err}</p>}
-            </li>
-          )}
         </ul>
       )}
     </li>
@@ -476,13 +475,14 @@ function FilterRow({ node, path, today, onOpen }: { node: HomeNode; path: string
   );
 }
 
-type SheetMode = 'menu' | 'level' | 'expiry' | 'rename' | 'add' | 'move' | 'type';
+type SheetMode = 'menu' | 'level' | 'expiry' | 'rename' | 'alias' | 'add' | 'move' | 'type';
 
 type SheetOps = {
   level: (l: Level) => Promise<void>;
   type: (t: Category) => Promise<void>;
   move: (to: string) => Promise<void>;
   rename: (name: string) => Promise<void>;
+  alias: (name: string) => Promise<void>;
   expiry: (date: string | null) => Promise<void>;
   addPlace: (parent: Place, name: string, kind: Place['kind']) => Promise<void>;
   addItem: (name: string) => Promise<void>;
@@ -532,6 +532,7 @@ function ActionSheet({
     level: ' — how much is left?',
     expiry: ' — expiry date',
     rename: ' — rename',
+    alias: ' — alternative name',
     add: ' — add inside',
     move: ' — move into…',
     type: ' — is a…',
@@ -581,6 +582,18 @@ function ActionSheet({
                 }}
               >
                 ✎ Rename
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={row}
+                onClick={() => {
+                  setText('');
+                  setMode('alias');
+                }}
+              >
+                🔤 Alternative name
               </button>
             </li>
             {(place || isContainer) && !isItem && (
@@ -661,6 +674,21 @@ function ActionSheet({
             }}
           >
             <input autoFocus value={text} onChange={(e) => setText(e.target.value)} className={input} />
+            <button type="submit" disabled={busy || !text.trim()} className={btn}>
+              Save
+            </button>
+          </form>
+        )}
+
+        {mode === 'alias' && (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (text.trim()) void run(() => ops.alias(text.trim()));
+            }}
+          >
+            <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="Also called… (this one only)" className={input} />
             <button type="submit" disabled={busy || !text.trim()} className={btn}>
               Save
             </button>

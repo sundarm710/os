@@ -204,17 +204,23 @@ export const LEVEL_STYLE: Record<Level, { label: string; dot: string; chip: stri
   empty: { label: 'Empty', dot: 'bg-rose-400', chip: 'border-rose-500/40 bg-rose-500/15 text-rose-200' },
 };
 
+/** One label per category, used everywhere (long-press "Change type" and the photo review card). */
+export const CATEGORY_LABEL: Record<Category, string> = {
+  container: '📦 Container',
+  perishable: '🥛 Perishable',
+  non_perishable: '🫙 Pantry (non-perishable)',
+  cleaning: '🧽 Cleaning',
+  utensil: '🍴 Utensil',
+  appliance: '🔌 Appliance',
+  bag: '🛍 Bag',
+  other: '• Other',
+};
+
 /** What a thing can be: a container (holds things) or one of the item categories. */
-export const TYPE_OPTIONS: { value: Category; label: string }[] = [
-  { value: 'container', label: '📦 Container' },
-  { value: 'perishable', label: '🥛 Perishable' },
-  { value: 'non_perishable', label: '🥫 Non-perishable' },
-  { value: 'cleaning', label: '🧽 Cleaning' },
-  { value: 'utensil', label: '🍴 Utensil' },
-  { value: 'appliance', label: '🔌 Appliance' },
-  { value: 'bag', label: '🛍 Bag' },
-  { value: 'other', label: 'Other' },
-];
+export const TYPE_OPTIONS = (Object.keys(CATEGORY_LABEL) as Category[]).map((value) => ({
+  value,
+  label: CATEGORY_LABEL[value],
+}));
 
 export const setLevel = (id: string, level: Level) => homeAction({ action: 'set_level', ref: id, level });
 export const setType = (id: string, type: Category) => homeAction({ action: 'set_type', ref: id, type });
@@ -310,6 +316,41 @@ export function toPhotoCards(items: ProposedItem[]): PhotoCard[] {
   };
   walk(items, null);
   return out;
+}
+
+/**
+ * A thing Sundar adds by hand during review ("also a lid, and 3 jars in here"). It is already vetted, so it
+ * starts accepted, sits right after card `after`, and nests under `parent` (null = directly in the place).
+ * Adding into a container that was still pending or dropped accepts it, so the nesting survives.
+ */
+export function addPhotoCard(
+  cards: PhotoCard[],
+  after: number,
+  parent: PhotoCard | null,
+  name: string,
+  category: Category,
+): { cards: PhotoCard[]; index: number } {
+  const n = cards.reduce((m, c) => Math.max(m, c.n), 0) + 1;
+  const card: PhotoCard = {
+    n,
+    name: name.trim(),
+    kind: category === 'container' ? 'container' : 'item',
+    category,
+    qty: null,
+    unit: null,
+    expires_on: null,
+    replace_every_days: null,
+    aliases: [],
+    attrs: category === 'perishable' ? { level: 'full' } : {},
+    confidence: 'high',
+    question: null,
+    parentN: parent?.n ?? null,
+    inside: parent?.name ?? null,
+    decision: 'accepted',
+  };
+  const next = cards.map((c) => (parent && c.n === parent.n && c.decision !== 'accepted' ? { ...c, decision: 'accepted' as const } : c));
+  next.splice(after + 1, 0, card);
+  return { cards: next, index: after + 1 };
 }
 
 /** Dropping a container drops everything inside it. */
