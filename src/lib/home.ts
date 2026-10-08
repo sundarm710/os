@@ -223,6 +223,13 @@ export const TYPE_OPTIONS = (Object.keys(CATEGORY_LABEL) as Category[]).map((val
   label: CATEGORY_LABEL[value],
 }));
 
+/** Level a review card will be saved with (items only); anything unset reads as "good for now". */
+export function cardLevel(c: { kind: string; attrs: Record<string, unknown> }): Level | null {
+  if (c.kind !== 'item') return null;
+  const l = c.attrs.level;
+  return (LEVELS as readonly unknown[]).includes(l) ? (l as Level) : 'good';
+}
+
 export const setLevel = (id: string, level: Level) => homeAction({ action: 'set_level', ref: id, level });
 export const setType = (id: string, type: Category) => homeAction({ action: 'set_type', ref: id, type });
 /** Quick-add a thing inside a container (perishables start Full). */
@@ -401,6 +408,7 @@ type BatchItem = {
   unit?: string;
   expires_on?: string;
   replace_every_days?: number;
+  status?: string;
   aliases?: string[];
   attrs?: Record<string, unknown>;
   children?: BatchItem[];
@@ -431,6 +439,9 @@ export function buildPhotoBatch(cards: PhotoCard[]): BatchItem[] {
         if (c.replace_every_days) item.replace_every_days = c.replace_every_days;
         if (c.aliases.length) item.aliases = c.aliases;
         if (Object.keys(c.attrs).length) item.attrs = c.attrs;
+        // low / empty must also land in status — that is what feeds the due list.
+        if (item.kind === 'item' && (c.attrs.level === 'low' || c.attrs.level === 'empty'))
+          item.status = c.attrs.level === 'low' ? 'low' : 'out';
         if (children.length) item.children = children;
         return item;
       });

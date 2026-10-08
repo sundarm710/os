@@ -6,6 +6,7 @@ import {
   moveTargetsFor,
   stockLevel,
   addPhotoCard,
+  type PhotoCard,
   shownAliases,
   daysUntil,
   expiryLabel,
@@ -255,5 +256,15 @@ describe('shownAliases', () => {
   it('hides layout seed aliases on places but keeps ones you added', () => {
     expect(shownAliases(n('slot', ['center', 'centre']))).toEqual([]);
     expect(shownAliases(n('slot', ['centre', 'masala shelf']))).toEqual(['masala shelf']);
+  });
+});
+
+describe('buildPhotoBatch levels', () => {
+  it('maps low/empty levels to status and leaves others alone', () => {
+    const mk = (n: number, level?: string) =>
+      ({ n, name: `x${n}`, kind: 'item', category: 'other', qty: null, unit: null, expires_on: null, replace_every_days: null,
+        aliases: [], attrs: level ? { level } : {}, confidence: 'high', question: null, parentN: null, inside: null, decision: 'accepted' }) as PhotoCard;
+    const out = buildPhotoBatch([mk(1, 'low'), mk(2, 'empty'), mk(3, 'full'), mk(4)]);
+    expect(out.map((i) => i.status)).toEqual(['low', 'out', undefined, undefined]);
   });
 });

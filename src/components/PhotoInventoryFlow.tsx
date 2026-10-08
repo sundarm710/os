@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { haptic } from '../lib/haptic';
 import {
   addPhotoCard,
+  cardLevel,
+  LEVELS,
+  LEVEL_STYLE,
   clearPhotoDraft,
   commitPhoto,
   decidePhotoCard,
@@ -365,6 +368,26 @@ export function PhotoInventoryFlow({ start, onCommitted, onExit }: Props) {
             </label>
           )}
         </div>
+
+        {cardLevel(current) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {LEVELS.map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => {
+                  haptic('tap');
+                  update({ attrs: { ...current.attrs, level: l } });
+                }}
+                className={`rounded-full border px-3 py-1 text-xs transition active:scale-95 ${
+                  l === cardLevel(current) ? LEVEL_STYLE[l].chip : 'border-slate-800 text-slate-400'
+                }`}
+              >
+                {LEVEL_STYLE[l].label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form
           className="mt-5 border-t border-slate-800 pt-4"
